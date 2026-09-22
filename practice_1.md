@@ -23,3 +23,33 @@ guest:x:405:100:guest:/dev/null:/sbin/nologin nobody:x:65534:65534:nobody:/:/sbi
 svn:x:101:104:svn:/var/svn:/sbin/nologin
 klogd:x:102:105:klogd:/dev/null:/sbin/nologin
 ```
+Для получения отсортированного списка имен пользователей была использована комнада: 
+```bash
+# Получение имен пользователей из файла /etc/passwd и их сортировка по алфавиту
+grep '' /etc/passwd | cut -d: -f1 | sort
+```
+Результат выполнения команды: 
+```text
+bin
+cron
+daemon
+dhcpcd
+ftp
+games
+guest
+halt
+klogd
+lp
+mail
+news
+nobody
+ntp
+root
+shutdown
+sshd
+svn
+sync
+uucp
+```
+### Вывод задачи №1
+В ходе выполнения задачи было изучено содержимое файла `/etc/passwd`. С помощью команд `grep`, `cut` и `sort` был получен отсортированный список имен пользователей.
