@@ -360,3 +360,288 @@ VFS: data/filesystem.zip
 ### Вывод по этапу 2
 
 В ходе второго этапа реализована передача параметров командной строки и автоматическое выполнение команд из стартового скрипта. Добавлена поддержка комментариев и обработка ошибок чтения файла. Работа программы проверена с помощью трёх Bash-скриптов с различными параметрами запуска.
+
+---
+
+## Этап 3. VFS
+
+**Цель:** Подключить виртуальную файловую систему (VFS) на основе ZIP-архива и реализовать получение информации о ней.
+
+### 1. Работа с VFS в оперативной памяти
+
+Для загрузки виртуальной файловой системы создан отдельный модуль `src/vfs.py`.
+
+Архив считывается в оперативную память с помощью `read_bytes()`. Для работы с его содержимым используются `BytesIO` и `zipfile.ZipFile`.
+
+Файлы и папки сохраняются в словаре `files`. Для папок используется значение `None`, для файлов — их содержимое в виде байтов.
+
+Таким образом, данные VFS обрабатываются в памяти без распаковки и изменения исходного ZIP-архива.
+
+### 2. Загрузка виртуальной файловой системы
+
+Источником VFS является ZIP-архив, путь к которому передаётся через параметр `--vfs`.
+
+В файле `src/vfs.py` реализована функция загрузки:
+
+```python
+import hashlib
+import zipfile
+from io import BytesIO
+from pathlib import Path
+
+
+def load_vfs(path):
+    """Загружает ZIP-архив в оперативную память."""
+    archive_path = Path(path)
+    archive_data = archive_path.read_bytes()
+
+    files = {}
+
+    # Чтение содержимого архива
+    with zipfile.ZipFile(BytesIO(archive_data)) as archive:
+        for item in archive.infolist():
+            if item.is_dir():
+                files[item.filename] = None
+            else:
+                files[item.filename] = archive.read(item)
+
+    return {
+        "name": archive_path.name,
+        "hash": hashlib.sha256(archive_data).hexdigest(),
+        "files": files,
+    }
+```
+
+Для подключения VFS в `src/emulator.py` добавлены импорты:
+
+```python
+from zipfile import BadZipFile
+from vfs import load_vfs
+```
+
+После получения параметров запуска выполняется загрузка архива:
+
+```python
+# Загрузка виртуальной файловой системы
+vfs = None
+
+if config.vfs:
+    try:
+        vfs = load_vfs(config.vfs)
+        output.insert(tk.END, f"VFS загружена: {vfs['name']}\n")
+        output.insert(
+            tk.END,
+            f"Количество элементов: {len(vfs['files'])}\n\n"
+        )
+
+    except (OSError, BadZipFile) as error:
+        output.insert(tk.END, f"Ошибка загрузки VFS: {error}\n\n")
+```
+
+При успешной загрузке отображаются название архива и количество элементов. При ошибке открытия файла или неправильном формате ZIP выводится сообщение об ошибке.
+
+Пример результата:
+
+```text
+VFS: data/filesystem.zip
+Стартовый скрипт: None
+
+VFS загружена: filesystem.zip
+Количество элементов: 5
+```
+
+### 3. Служебная команда vfs-info
+
+Реализована команда `vfs-info`, которая выводит имя загруженной виртуальной файловой системы и хеш SHA-256 её данных.
+
+Для вычисления хеша используется функция `hashlib.sha256()`.
+
+В функцию `execute_command()` добавлена обработка новой команды:
+
+```python
+elif command == "vfs-info":
+    if args:
+        output.insert(
+            tk.END,
+            "Ошибка: vfs-info не принимает аргументы\n\n"
+        )
+    elif vfs is None:
+        output.insert(tk.END, "Ошибка: VFS не загружена\n\n")
+    else:
+        output.insert(tk.END, f"Имя VFS: {vfs['name']}\n")
+        output.insert(tk.END, f"SHA-256: {vfs['hash']}\n\n")
+```
+
+Результат выполнения команды:
+
+```text
+> vfs-info
+Имя VFS: filesystem.zip
+SHA-256: 7c5ffd34b47ca3df4e303e739c66493b12701b9606fc13221885aaeb33869156
+```
+
+Также проверены случаи неправильного использования команды.
+
+Передача лишнего аргумента:
+
+```text
+> vfs-info hello
+Ошибка: vfs-info не принимает аргументы
+```
+
+Выполнение без загруженной VFS:
+
+```text
+> vfs-info
+Ошибка: VFS не загружена
+```
+
+Все проверки выполнены успешно.
+
+### 4. Проверка различных вариантов VFS
+
+Для тестирования подготовлены три ZIP-архива с разной структурой. Их создание выполняется с помощью файла `tests/create_vfs.py`.
+
+**Минимальная VFS — `minimal.zip`**
+
+Архив содержит одну пустую папку:
+
+```text
+minimal.zip
+└── empty/
+```
+
+**VFS с несколькими файлами — `multiple.zip`**
+
+```text
+multiple.zip
+├── readme.txt
+├── notes.txt
+├── tasks.txt
+└── documents/
+    └── report.txt
+```
+
+**VFS с тремя уровнями вложенности — `filesystem.zip`**
+
+```text
+filesystem.zip
+└── home/
+    └── student/
+        ├── notes.txt
+        └── documents/
+            └── report.txt
+```
+
+Архивы создаются с помощью `zipfile.ZipFile` и метода `writestr()`.
+
+Для проверки каждого варианта в папке `tests` созданы отдельные Bash-скрипты.
+
+**Файл `tests/test_vfs_minimal.sh`:**
+
+```bash
+#!/bin/bash
+
+bash run.sh --vfs data/minimal.zip --script startup.txt
+```
+
+**Файл `tests/test_vfs_multiple.sh`:**
+
+```bash
+#!/bin/bash
+
+bash run.sh --vfs data/multiple.zip --script startup.txt
+```
+
+**Файл `tests/test_vfs_nested.sh`:**
+
+```bash
+#!/bin/bash
+
+bash run.sh --vfs data/filesystem.zip --script startup.txt
+```
+
+Результаты проверок:
+
+| Архив | Количество элементов | Результат |
+|---|---:|---|
+| `minimal.zip` | 1 | Успешно |
+| `multiple.zip` | 5 | Успешно |
+| `filesystem.zip` | 5 | Успешно |
+
+Для всех вариантов VFS проверены загрузка архива, подсчёт элементов и работа команды `vfs-info`.
+
+### 5. Проверка команд через стартовый скрипт
+
+Для проверки всех реализованных команд обновлён файл `startup.txt`.
+
+Его содержимое:
+
+```text
+# Проверка команд-заглушек
+ls
+ls Documents
+cd
+cd Downloads
+
+# Проверка переменных окружения
+ls $HOME
+
+# Проверка виртуальной файловой системы
+vfs-info
+vfs-info hello
+
+# Проверка неизвестной команды
+hello
+```
+
+Стартовый скрипт выполняет команды последовательно. Комментарии и пустые строки пропускаются.
+
+Результаты проверки:
+
+```text
+> ls
+Команда: ls
+Аргументы: []
+
+> ls Documents
+Команда: ls
+Аргументы: ['Documents']
+
+> cd
+Команда: cd
+Аргументы: []
+
+> cd Downloads
+Команда: cd
+Аргументы: ['Downloads']
+
+> ls $HOME
+Команда: ls
+Аргументы: ['/Users/macbook']
+
+> vfs-info
+Имя VFS: filesystem.zip
+SHA-256: 7c5ffd34b47ca3df4e303e739c66493b12701b9606fc13221885aaeb33869156
+
+> vfs-info hello
+Ошибка: vfs-info не принимает аргументы
+
+> hello
+Ошибка: неизвестная команда 'hello'
+```
+
+Для отдельной проверки завершения программы создан файл `tests/startup_exit.txt`:
+
+```text
+# Проверка завершения работы эмулятора
+exit
+```
+
+При выполнении этого скрипта эмулятор автоматически закрывает графическое окно.
+
+Также предусмотрена обработка ошибок загрузки VFS: отсутствующего файла и архива неправильного формата.
+
+### Вывод по этапу 3
+
+В ходе третьего этапа реализована загрузка виртуальной файловой системы из ZIP-архива в оперативную память. Добавлена команда `vfs-info` для вывода имени архива и его SHA-256. Работа эмулятора проверена с тремя вариантами VFS, а также через стартовые скрипты с обработкой ошибок.
