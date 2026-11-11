@@ -134,8 +134,8 @@ def validate_file(value):
         raise ValueError(f"--repository: {error}") from error
 
 
-def main(argv=None):
-    """Проверить аргументы и вывести все четыре настройки ключ—значение."""
+def parse_args(argv=None):
+    """Прочитать и проверить настройки первого этапа."""
     parser = build_parser()
     config = parser.parse_args(argv)
     try:
@@ -146,12 +146,4 @@ def main(argv=None):
             validate_url(config.repository)
     except ValueError as error:
         parser.error(str(error))
-    print(f"package={config.package}")
-    print(f"repository={config.repository}")
-    print(f"test_repository={str(config.test_repository).lower()}")
-    print(f"ascii_tree={str(config.ascii_tree).lower()}")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+    return config

@@ -1,13 +1,13 @@
-# Фактический протокол проверки этапа 1
+# Проверка этапа 1. Вариант 22
 
-Дата: 11.11.2026. Рабочий каталог — корень репозитория.
-Python: `3.14.9`. Все команды выполнены локально.
-Ниже stdout и stderr показаны в одном блоке; ошибки CLI идут в stderr.
+Дата: 11.11.2026. Все команды выполнены в `practice-02-variant-22`.
+Среда: macOS, Python 3.14.9.
+stdout и stderr приведены вместе; ошибки CLI выводятся в stderr.
 
 ## Запуск 1
 
-```sh
-python3 -m unittest discover -s practice_2/tests -v
+```bash
+python3 -B -m unittest discover -s tests -v
 ```
 
 Код завершения: `0`.
@@ -45,22 +45,21 @@ test_unsupported_options (test_cli.CliTests.test_unsupported_options)
 Отклонить неизвестные опции, сокращения и поздние параметры. ... ok
 
 ----------------------------------------------------------------------
-Ran 15 tests in 1.756s
+Ran 15 tests in 1.774s
 
 OK
 ```
 
 ## Запуск 2
 
-```sh
-sh practice_2/run.sh --package org.apache.commons:commons-lang3:3.12.0 \
-  --repository https://repo.maven.apache.org/maven2/ --ascii-tree
+```bash
+bash run.sh --package junit:junit:4.13.2 --repository https://repo.maven.apache.org/maven2/ --ascii-tree
 ```
 
 Код завершения: `0`.
 
 ```text
-package=org.apache.commons:commons-lang3:3.12.0
+package=junit:junit:4.13.2
 repository=https://repo.maven.apache.org/maven2/
 test_repository=false
 ascii_tree=true
@@ -68,156 +67,211 @@ ascii_tree=true
 
 ## Запуск 3
 
-```sh
-sh practice_2/run.sh --package A --repository practice_2/tests/fixtures/repository.txt --test-repository
+```bash
+bash run.sh --package A --repository examples/repository.txt --test-repository
 ```
 
 Код завершения: `0`.
 
 ```text
 package=A
-repository=practice_2/tests/fixtures/repository.txt
+repository=examples/repository.txt
 test_repository=true
 ascii_tree=false
 ```
 
 ## Запуск 4
 
-```sh
-sh practice_2/run.sh --repository https://repo.example.org/
+```bash
+python3 -B src/main.py --package A --repository examples/repository.txt --test-repository
 ```
 
-Код завершения: `2`.
+Код завершения: `0`.
 
 ```text
-usage: cli.py [-h] --package PACKAGE --repository REPOSITORY
-              [--test-repository] [--ascii-tree]
-Ошибка: не указаны обязательные параметры: --package
-Справка: --help
+package=A
+repository=examples/repository.txt
+test_repository=true
+ascii_tree=false
 ```
 
 ## Запуск 5
 
-```sh
-sh practice_2/run.sh --package 'bad name' --repository https://repo.example.org/
+```bash
+bash run.sh --help
 ```
 
-Код завершения: `2`.
+Код завершения: `0`.
 
 ```text
-usage: cli.py [-h] --package PACKAGE --repository REPOSITORY
-              [--test-repository] [--ascii-tree]
-Ошибка: --package: ожидается groupId:artifactId[:version] без пробелов
-Справка: --help
+usage: main.py [-h] --package PACKAGE --repository REPOSITORY
+               [--test-repository] [--ascii-tree]
+
+Maven: этап 1, только проверка и вывод конфигурации.
+
+options:
+  -h, --help            show this help message and exit
+  --package PACKAGE     groupId:artifactId[:version]; в тестовом режиме буква
+                        A-Z
+  --repository REPOSITORY
+                        HTTP(S) URL или путь к файлу при --test-repository
+  --test-repository     использовать локальный тестовый файл; значение не
+                        требуется
+  --ascii-tree          сохранить настройку ASCII-дерева; значение не
+                        требуется
 ```
 
 ## Запуск 6
 
-```sh
-sh practice_2/run.sh --package g:a --repository
+```bash
+bash run.sh --repository https://repo.maven.apache.org/maven2/
 ```
 
 Код завершения: `2`.
 
 ```text
-usage: cli.py [-h] --package PACKAGE --repository REPOSITORY
-              [--test-repository] [--ascii-tree]
-Ошибка: параметр --repository: требуется одно значение
+usage: main.py [-h] --package PACKAGE --repository REPOSITORY
+               [--test-repository] [--ascii-tree]
+Ошибка: не указаны обязательные параметры: --package
 Справка: --help
 ```
 
 ## Запуск 7
 
-```sh
-sh practice_2/run.sh --package g:a --repository https://repo.example.org:70000
+```bash
+bash run.sh --package junit:junit
 ```
 
 Код завершения: `2`.
 
 ```text
-usage: cli.py [-h] --package PACKAGE --repository REPOSITORY
-              [--test-repository] [--ascii-tree]
-Ошибка: --repository: порт должен быть числом от 1 до 65535
+usage: main.py [-h] --package PACKAGE --repository REPOSITORY
+               [--test-repository] [--ascii-tree]
+Ошибка: не указаны обязательные параметры: --repository
 Справка: --help
 ```
 
 ## Запуск 8
 
-```sh
-sh practice_2/run.sh --package A --repository practice_2/tests/fixtures/missing.txt --test-repository
+```bash
+bash run.sh --package junit:junit --repository
 ```
 
 Код завершения: `2`.
 
 ```text
-usage: cli.py [-h] --package PACKAGE --repository REPOSITORY
-              [--test-repository] [--ascii-tree]
-Ошибка: --repository: файл не существует или путь указывает на каталог
+usage: main.py [-h] --package PACKAGE --repository REPOSITORY
+               [--test-repository] [--ascii-tree]
+Ошибка: параметр --repository: требуется одно значение
 Справка: --help
 ```
 
 ## Запуск 9
 
-```sh
-sh practice_2/run.sh --package A --repository https://repo.example.org/ --test-repository
+```bash
+bash run.sh --package /bad --repository https://repo.maven.apache.org/maven2/
 ```
 
 Код завершения: `2`.
 
 ```text
-usage: cli.py [-h] --package PACKAGE --repository REPOSITORY
-              [--test-repository] [--ascii-tree]
-Ошибка: --repository: тестовый режим требует путь к файлу, а не URL
+usage: main.py [-h] --package PACKAGE --repository REPOSITORY
+               [--test-repository] [--ascii-tree]
+Ошибка: --package: ожидается groupId:artifactId[:version] без пробелов
 Справка: --help
 ```
 
 ## Запуск 10
 
-```sh
-sh practice_2/run.sh --package g:a --repository practice_2/tests/fixtures/repository.txt
+```bash
+bash run.sh --package junit:junit --repository ftp://example.org/
 ```
 
 Код завершения: `2`.
 
 ```text
-usage: cli.py [-h] --package PACKAGE --repository REPOSITORY
-              [--test-repository] [--ascii-tree]
+usage: main.py [-h] --package PACKAGE --repository REPOSITORY
+               [--test-repository] [--ascii-tree]
 Ошибка: --repository: нужен HTTP(S) URL; для файла нужен тестовый режим
 Справка: --help
 ```
 
 ## Запуск 11
 
-```sh
-sh practice_2/run.sh --package g:a --repository https://repo.example.org/ --test-repository=false
+```bash
+bash run.sh --package A --repository missing.txt --test-repository
 ```
 
 Код завершения: `2`.
 
 ```text
-usage: cli.py [-h] --package PACKAGE --repository REPOSITORY
-              [--test-repository] [--ascii-tree]
-Ошибка: параметр --test-repository: флаг не принимает значение 'false'
+usage: main.py [-h] --package PACKAGE --repository REPOSITORY
+               [--test-repository] [--ascii-tree]
+Ошибка: --repository: файл не существует или путь указывает на каталог
 Справка: --help
 ```
 
 ## Запуск 12
 
-```sh
-sh practice_2/run.sh --package g:a --repository https://repo.example.org/ --ascii-tree yes
+```bash
+bash run.sh --package A --repository https://example.org/ --test-repository
 ```
 
 Код завершения: `2`.
 
 ```text
-usage: cli.py [-h] --package PACKAGE --repository REPOSITORY
-              [--test-repository] [--ascii-tree]
-Ошибка: неизвестные параметры или значения: yes
+usage: main.py [-h] --package PACKAGE --repository REPOSITORY
+               [--test-repository] [--ascii-tree]
+Ошибка: --repository: тестовый режим требует путь к файлу, а не URL
 Справка: --help
 ```
 
-## Дополнительные проверки
+## Запуск 13
 
-Проверка PEP8: `pycodestyle 2.15.0`, предел 79 символов.
-Код завершения 0, замечаний нет. Проверка `sh -n practice_2/run.sh`: код 0.
-Проверены docstring модулей, классов и функций; длина функций не превышает 40 строк.
+```bash
+bash run.sh --package junit:junit --repository examples/repository.txt
+```
+
+Код завершения: `2`.
+
+```text
+usage: main.py [-h] --package PACKAGE --repository REPOSITORY
+               [--test-repository] [--ascii-tree]
+Ошибка: --repository: нужен HTTP(S) URL; для файла нужен тестовый режим
+Справка: --help
+```
+
+## Запуск 14
+
+```bash
+bash run.sh --package A --repository examples/repository.txt --test-repository=false
+```
+
+Код завершения: `2`.
+
+```text
+usage: main.py [-h] --package PACKAGE --repository REPOSITORY
+               [--test-repository] [--ascii-tree]
+Ошибка: параметр --test-repository: флаг не принимает значение 'false'
+Справка: --help
+```
+
+## Запуск 15
+
+```bash
+bash run.sh --package A --repository examples/repository.txt --ascii-tree=maybe
+```
+
+Код завершения: `2`.
+
+```text
+usage: main.py [-h] --package PACKAGE --repository REPOSITORY
+               [--test-repository] [--ascii-tree]
+Ошибка: параметр --ascii-tree: флаг не принимает значение 'maybe'
+Справка: --help
+```
+
+## Оформление кода
+
+`pycodestyle 2.15.0`, предел 79 символов: код 0, замечаний нет.
+`sh -n run.sh`: код 0.
