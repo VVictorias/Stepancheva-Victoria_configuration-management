@@ -10,13 +10,13 @@ from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CLI = ROOT / "src" / "cli.py"
-FIXTURE = ROOT / "tests" / "fixtures" / "repository.txt"
+CLI = ROOT / "src" / "main.py"
+FIXTURE = ROOT / "examples" / "repository.txt"
 PACKAGE = "org.apache.commons:commons-lang3:3.12.0"
 URL = "https://repo.maven.apache.org/maven2/"
 BASE = ["--package", PACKAGE, "--repository", URL]
 sys.path.insert(0, str(ROOT / "src"))
-from cli import validate_file  # noqa: E402
+from depgraph.config import validate_file  # noqa: E402
 
 
 class CliTests(unittest.TestCase):
@@ -155,7 +155,7 @@ class CliTests(unittest.TestCase):
     def test_unreadable_file(self):
         """Детерминированно проверить запрет чтения при любых правах ОС."""
         error = PermissionError("нет доступа")
-        with patch("cli.Path.open", side_effect=error):
+        with patch("depgraph.config.Path.open", side_effect=error):
             with self.assertRaisesRegex(ValueError, "--repository.*доступа"):
                 validate_file(str(FIXTURE))
 
