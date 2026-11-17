@@ -1,6 +1,7 @@
 """Воспроизводимые проверки CLI через отдельные процессы Python."""
 
 import os
+from importlib import import_module
 from pathlib import Path
 import subprocess
 import sys
@@ -16,7 +17,7 @@ PACKAGE = "org.apache.commons:commons-lang3:3.12.0"
 URL = "https://repo.maven.apache.org/maven2/"
 BASE = ["--package", PACKAGE, "--repository", URL]
 sys.path.insert(0, str(ROOT / "src"))
-from depgraph.config import validate_file  # noqa: E402
+validate_file = import_module("depgraph.config").validate_file
 
 
 class CliTests(unittest.TestCase):
@@ -25,8 +26,11 @@ class CliTests(unittest.TestCase):
     def run_cli(self, args, cwd=None):
         """Запустить настоящее приложение с переданными аргументами."""
         return subprocess.run(
-            [sys.executable, str(CLI), *args], cwd=cwd,
-            capture_output=True, text=True, check=False,
+            [sys.executable, str(CLI), *args],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=False,
         )
 
     def assert_error(self, args, expected):
@@ -43,10 +47,13 @@ class CliTests(unittest.TestCase):
         result = self.run_cli(BASE)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stderr, "")
-        self.assertEqual(result.stdout, (
-            f"package={PACKAGE}\nrepository={URL}\n"
-            "test_repository=false\nascii_tree=false\n"
-        ))
+        self.assertEqual(
+            result.stdout,
+            (
+                f"package={PACKAGE}\nrepository={URL}\n"
+                "test_repository=false\nascii_tree=false\n"
+            ),
+        )
 
     def test_remote_ascii_setting(self):
         """Включение настройки дерева не запускает построение графа."""
@@ -59,15 +66,24 @@ class CliTests(unittest.TestCase):
         """Проверить тестовый источник с обоими состояниями ASCII-флага."""
         for flags, ascii_value in [([], "false"), (["--ascii-tree"], "true")]:
             with self.subTest(flags=flags):
-                result = self.run_cli([
-                    "--package", "A", "--repository", str(FIXTURE),
-                    "--test-repository", *flags,
-                ])
+                result = self.run_cli(
+                    [
+                        "--package",
+                        "A",
+                        "--repository",
+                        str(FIXTURE),
+                        "--test-repository",
+                        *flags,
+                    ]
+                )
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(result.stdout, (
-                    f"package=A\nrepository={FIXTURE}\n"
-                    f"test_repository=true\nascii_tree={ascii_value}\n"
-                ))
+                self.assertEqual(
+                    result.stdout,
+                    (
+                        f"package=A\nrepository={FIXTURE}\n"
+                        f"test_repository=true\nascii_tree={ascii_value}\n"
+                    ),
+                )
 
     def test_coordinates_and_urls(self):
         """Принять координаты без версии, HTTP, порт и IPv6."""
@@ -76,9 +92,14 @@ class CliTests(unittest.TestCase):
             ("org.example:demo:1.0-SNAPSHOT", "https://[::1]:443/maven2/"),
         ]:
             with self.subTest(package=package, url=url):
-                result = self.run_cli([
-                    "--package", package, "--repository", url,
-                ])
+                result = self.run_cli(
+                    [
+                        "--package",
+                        package,
+                        "--repository",
+                        url,
+                    ]
+                )
                 self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_missing_required_values(self):
@@ -97,60 +118,122 @@ class CliTests(unittest.TestCase):
     def test_invalid_package(self):
         """Отклонить пустые, неполные и повреждённые координаты Maven."""
         for package in [
-            "", " ", "commons-lang3", "org.example:", ":demo", "g:a:",
-            "g:a:1:extra", "org..example:demo", "g:bad name", "g:../demo",
+            "",
+            " ",
+            "commons-lang3",
+            "org.example:",
+            ":demo",
+            "g:a:",
+            "g:a:1:extra",
+            "org..example:demo",
+            "g:bad name",
+            "g:../demo",
         ]:
             with self.subTest(package=package):
-                self.assert_error([
-                    "--package", package, "--repository", URL,
-                ], "--package")
+                self.assert_error(
+                    [
+                        "--package",
+                        package,
+                        "--repository",
+                        URL,
+                    ],
+                    "--package",
+                )
 
     def test_invalid_test_package(self):
         """Тестовые имена должны состоять из одной большой латинской буквы."""
         for package in ["", "a", "AA", "А", PACKAGE]:
             with self.subTest(package=package):
-                self.assert_error([
-                    "--package", package, "--repository", str(FIXTURE),
-                    "--test-repository",
-                ], "буква A-Z")
+                self.assert_error(
+                    [
+                        "--package",
+                        package,
+                        "--repository",
+                        str(FIXTURE),
+                        "--test-repository",
+                    ],
+                    "буква A-Z",
+                )
 
     def test_invalid_url(self):
         """Отклонить неверную схему, сервер, порт и запрещённые части URL."""
         for url in [
-            "", " ", "ftp://repo.example.org", "https://", "https:/repo.org",
-            "https://bad host/repo", "https://bad_host/repo", "https://[abc]",
-            "https://repo.org:abc", "https://repo.org:65536",
-            "https://repo.org:0", "https://repo.org:",
-            "https://[::1]garbage", "https://[::1]:bad",
-            "https://repo.org/path\n", "https://repo.org/%zz",
-            "https://repo.org/\\path", "https://user:pass@repo.org",
-            "https://repo.org/?x=1", "https://repo.org/#part",
+            "",
+            " ",
+            "ftp://repo.example.org",
+            "https://",
+            "https:/repo.org",
+            "https://bad host/repo",
+            "https://bad_host/repo",
+            "https://[abc]",
+            "https://repo.org:abc",
+            "https://repo.org:65536",
+            "https://repo.org:0",
+            "https://repo.org:",
+            "https://[::1]garbage",
+            "https://[::1]:bad",
+            "https://repo.org/path\n",
+            "https://repo.org/%zz",
+            "https://repo.org/\\path",
+            "https://user:pass@repo.org",
+            "https://repo.org/?x=1",
+            "https://repo.org/#part",
         ]:
             with self.subTest(url=url):
-                self.assert_error([
-                    "--package", PACKAGE, "--repository", url,
-                ], "--repository")
+                self.assert_error(
+                    [
+                        "--package",
+                        PACKAGE,
+                        "--repository",
+                        url,
+                    ],
+                    "--repository",
+                )
 
     def test_source_mode_mismatch(self):
         """Отклонить URL в тестовом режиме и путь без тестового режима."""
-        self.assert_error([
-            "--package", "A", "--repository", URL, "--test-repository",
-        ], "путь к файлу, а не URL")
-        self.assert_error([
-            "--package", PACKAGE, "--repository", str(FIXTURE),
-        ], "для файла нужен тестовый режим")
+        self.assert_error(
+            [
+                "--package",
+                "A",
+                "--repository",
+                URL,
+                "--test-repository",
+            ],
+            "путь к файлу, а не URL",
+        )
+        self.assert_error(
+            [
+                "--package",
+                PACKAGE,
+                "--repository",
+                str(FIXTURE),
+            ],
+            "для файла нужен тестовый режим",
+        )
 
     def test_invalid_file(self):
         """Отклонить пустой путь, отсутствующий файл, каталог и file URL."""
         with tempfile.TemporaryDirectory() as directory:
-            sources = ["", " ", str(Path(directory) / "missing.txt"),
-                       directory, "file:///tmp/repository.txt"]
+            sources = [
+                "",
+                " ",
+                str(Path(directory) / "missing.txt"),
+                directory,
+                "file:///tmp/repository.txt",
+            ]
             for source in sources:
                 with self.subTest(source=source):
-                    self.assert_error([
-                        "--package", "A", "--repository", source,
-                        "--test-repository",
-                    ], "--repository")
+                    self.assert_error(
+                        [
+                            "--package",
+                            "A",
+                            "--repository",
+                            source,
+                            "--test-repository",
+                        ],
+                        "--repository",
+                    )
 
     def test_unreadable_file(self):
         """Детерминированно проверить запрет чтения при любых правах ОС."""
@@ -176,8 +259,12 @@ class CliTests(unittest.TestCase):
         """Справка доступна без обязательных параметров."""
         result = self.run_cli(["--help"])
         self.assertEqual(result.returncode, 0, result.stderr)
-        for flag in ["--package", "--repository", "--test-repository",
-                     "--ascii-tree"]:
+        for flag in [
+            "--package",
+            "--repository",
+            "--test-repository",
+            "--ascii-tree",
+        ]:
             self.assertIn(flag, result.stdout)
 
     def test_launcher_from_other_directory(self):
@@ -186,9 +273,19 @@ class CliTests(unittest.TestCase):
             source = Path(directory) / "test repository.txt"
             source.write_text("не разбирается на этапе 1", encoding="utf-8")
             result = subprocess.run(
-                ["sh", str(ROOT / "run.sh"), "--package", "A",
-                 "--repository", source.name, "--test-repository"],
-                cwd=directory, capture_output=True, text=True, check=False,
+                [
+                    "sh",
+                    str(ROOT / "run.sh"),
+                    "--package",
+                    "A",
+                    "--repository",
+                    source.name,
+                    "--test-repository",
+                ],
+                cwd=directory,
+                capture_output=True,
+                text=True,
+                check=False,
                 env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
             )
             self.assertEqual(result.returncode, 0, result.stderr)

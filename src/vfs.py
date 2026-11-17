@@ -1,8 +1,10 @@
+"""Загрузка виртуальной файловой системы из ZIP в память."""
 
 import hashlib
 import zipfile
 from io import BytesIO
 from pathlib import Path
+
 
 def load_vfs(path):
     """Загружает ZIP-архив в оперативную память."""

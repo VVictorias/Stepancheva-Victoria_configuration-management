@@ -8,14 +8,21 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 
+MAX_HOST_LENGTH = 253
+FIRST_PRINTABLE_CODE = 32
+USAGE_ERROR = 2
+INVALID_PORT = 0
+
+
 class ConfigParser(argparse.ArgumentParser):
     """Парсер с понятными сообщениями об ошибках командной строки."""
 
     def error(self, message):
         """Вывести ошибку в stderr и завершить работу с кодом 2."""
         translations = {
-            "the following arguments are required:":
-                "не указаны обязательные параметры:",
+            "the following arguments are required:": (
+                "не указаны обязательные параметры:"
+            ),
             "expected one argument": "требуется одно значение",
             "unrecognized arguments:": "неизвестные параметры или значения:",
             "ignored explicit argument": "флаг не принимает значение",
@@ -24,7 +31,7 @@ class ConfigParser(argparse.ArgumentParser):
         for original, translated in translations.items():
             message = message.replace(original, translated)
         self.print_usage(sys.stderr)
-        self.exit(2, f"Ошибка: {message}\nСправка: --help\n")
+        self.exit(USAGE_ERROR, f"Ошибка: {message}\nСправка: --help\n")
 
 
 def build_parser():
@@ -34,19 +41,23 @@ def build_parser():
         allow_abbrev=False,
     )
     parser.add_argument(
-        "--package", required=True,
+        "--package",
+        required=True,
         help="groupId:artifactId[:version]; в тестовом режиме буква A-Z",
     )
     parser.add_argument(
-        "--repository", required=True,
+        "--repository",
+        required=True,
         help="HTTP(S) URL или путь к файлу при --test-repository",
     )
     parser.add_argument(
-        "--test-repository", action="store_true",
+        "--test-repository",
+        action="store_true",
         help="использовать локальный тестовый файл; значение не требуется",
     )
     parser.add_argument(
-        "--ascii-tree", action="store_true",
+        "--ascii-tree",
+        action="store_true",
         help="сохранить настройку ASCII-дерева; значение не требуется",
     )
     return parser
@@ -77,39 +88,51 @@ def validate_host(host):
     except ValueError:
         pass
     label = r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
-    if len(host) > 253 or not re.fullmatch(rf"{label}(?:\.{label})*", host):
+    if len(host) > MAX_HOST_LENGTH or not re.fullmatch(
+        rf"{label}(?:\.{label})*", host
+    ):
         raise ValueError("некорректное имя сервера")
 
 
+def validate_url_text(value):
+    """Отклонить пробелы, управляющие символы и повреждённые escape-коды."""
+    if any(
+        char.isspace() or ord(char) < FIRST_PRINTABLE_CODE for char in value
+    ):
+        raise ValueError("пробелы и управляющие символы в URL запрещены")
+    if "\\" in value or re.search(r"%(?![0-9A-Fa-f]{2})", value):
+        raise ValueError("некорректное экранирование URL")
+    if "?" in value or "#" in value:
+        raise ValueError("URL не должен содержать query или fragment")
+
+
+def validate_authority(url):
+    """Проверить сервер, IPv6 и порт отдельно от строки адреса."""
+    if url.username is not None or url.password is not None:
+        raise ValueError("данные авторизации в URL не поддерживаются")
+    validate_host(url.hostname)
+    if url.netloc.startswith("[") and not re.fullmatch(
+        r"\[[^]]+\](?::[0-9]+)?", url.netloc
+    ):
+        raise ValueError("некорректная запись IPv6-адреса или порта")
+    try:
+        port = url.port
+    except ValueError as error:
+        raise ValueError("порт должен быть числом от 1 до 65535") from error
+    if url.netloc.endswith(":") or port == INVALID_PORT:
+        raise ValueError("некорректный порт")
+
+
 def validate_url(value):
-    """Проверить HTTP(S) URL; доступность сервера на этапе 1 не проверяется."""
+    """Проверить HTTP(S) URL без сетевого запроса."""
     try:
         url = urlsplit(value)
         if url.scheme not in ("http", "https") or not url.netloc:
             raise ValueError(
                 "нужен HTTP(S) URL; для файла нужен тестовый режим"
             )
-        if any(char.isspace() or ord(char) < 32 for char in value):
-            raise ValueError("пробелы и управляющие символы в URL запрещены")
-        if "\\" in value or re.search(r"%(?![0-9A-Fa-f]{2})", value):
-            raise ValueError("некорректное экранирование URL")
-        if url.username is not None or url.password is not None:
-            raise ValueError("данные авторизации в URL не поддерживаются")
-        if "?" in value or "#" in value:
-            raise ValueError("URL не должен содержать query или fragment")
-        validate_host(url.hostname)
-        if url.netloc.startswith("[") and not re.fullmatch(
-            r"\[[^]]+\](?::[0-9]+)?", url.netloc
-        ):
-            raise ValueError("некорректная запись IPv6-адреса или порта")
-        try:
-            port = url.port
-        except ValueError as error:
-            raise ValueError(
-                "порт должен быть числом от 1 до 65535"
-            ) from error
-        if url.netloc.endswith(":") or port == 0:
-            raise ValueError("некорректный порт")
+        validate_url_text(value)
+        validate_authority(url)
     except ValueError as error:
         raise ValueError(f"--repository: {error}") from error
 
