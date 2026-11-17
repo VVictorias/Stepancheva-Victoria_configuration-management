@@ -70,6 +70,25 @@ class GraphTests(unittest.TestCase):
         self.assertEqual(completed[0], str(length))
         self.assertEqual(cycles, [])
 
+    def test_dependency_order(self):
+        """Каждая зависимость находится раньше своего потребителя."""
+        graph = self.build({'A': ['B', 'C'], 'B': ['D'],
+                            'C': ['D'], 'D': []})
+        order = graph_module.dependency_order(graph)
+        self.assertEqual(order, ['D', 'B', 'C'])
+        positions = {node: index for index, node in enumerate(order + ['A'])}
+        for node, children in graph.edges.items():
+            for child in children:
+                self.assertLess(positions[child], positions[node])
+        self.assertEqual(graph_module.dependency_order(self.build({'A': []})), [])
+
+    def test_no_order_for_cycle(self):
+        """Цикл не выдаётся за корректный порядок установки."""
+        for edges in [{'A': ['A']}, {'A': ['B'], 'B': ['A']}]:
+            with self.subTest(edges=edges):
+                with self.assertRaisesRegex(ValueError, 'порядок.*цикл'):
+                    graph_module.dependency_order(self.build(edges))
+
     def test_invalid_repository(self):
         """Отклонить пустой файл, неверные имена и отсутствующие вершины."""
         for text in ["", "a: B", "A B", "A: BB", "A: B", "A:\nA:"]:

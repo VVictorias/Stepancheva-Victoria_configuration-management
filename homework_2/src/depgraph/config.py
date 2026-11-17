@@ -62,7 +62,7 @@ def build_parser():
     )
     parser.add_argument(
         "--mode",
-        choices=("config", "direct", "graph"),
+        choices=("config", "direct", "graph", "order"),
         default="graph",
         help="config: настройки; direct: прямые зависимости; graph: граф",
     )

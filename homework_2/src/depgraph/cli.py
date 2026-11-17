@@ -3,7 +3,7 @@
 import sys
 
 from .config import parse_args
-from .graph import adjacency_text, build_graph, traverse
+from .graph import adjacency_text, build_graph, dependency_order, traverse
 from .repository import MavenSource, TestRepository
 
 
@@ -38,6 +38,10 @@ def execute(config):
             print(item if isinstance(item, str) else item.package)
         return
     graph = build_graph(source, root)
+    if config.mode == "order":
+        order = dependency_order(graph)
+        print("\n".join(order) if order else "Зависимостей нет.")
+        return
     print(adjacency_text(graph))
     _, cycles = traverse(graph)
     for left, right in cycles:

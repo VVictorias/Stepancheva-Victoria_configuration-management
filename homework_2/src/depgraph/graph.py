@@ -58,3 +58,12 @@ def adjacency_text(graph):
         f"{node}: {' '.join(children)}".rstrip()
         for node, children in graph.edges.items()
     )
+
+
+def dependency_order(graph):
+    """Вернуть зависимости раньше потребителей; отклонить циклический граф."""
+    completed, cycles = traverse(graph)
+    if cycles:
+        details = ", ".join(f"{left} -> {right}" for left, right in cycles)
+        raise ValueError(f"порядок загрузки невозможен, есть цикл: {details}")
+    return [node for node in completed if node != graph.root]
