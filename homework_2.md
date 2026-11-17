@@ -2,6 +2,11 @@
 
 **Вариант:** №22
 
+Итоговая версия включает все пять этапов. Раздел первого этапа описывает
+его исходное поведение; в текущей программе оно повторяется через
+`--mode config`. По умолчанию запускается визуализация.
+Актуальные команды и все параметры собраны в [README](homework_2/README.md).
+
 ## Этап 1. Минимальный прототип с конфигурацией
 
 **Цель:** Создать минимальное CLI-приложение для настройки инструмента
@@ -201,7 +206,7 @@ python3 -B -m unittest discover -s tests -v
 Документация модулей и функций оформлена через docstring, включая
 старые файлы эмулятора. Поведение первой домашней работы сохранено.
 
-Исторические коммиты с названиями вроде `README` и `add task 9`
+В опубликованной истории осталось 20 коммитов с названиями вроде `README` и `add task 9`
 не соответствуют C6. Добавление новых коммитов не меняет их названия.
 Опубликованная история сохранена; исправление C6 для старых коммитов
 требует отдельного согласования переписывания истории.
@@ -387,3 +392,172 @@ Classpath Maven перечисляет JAR сначала JUnit, затем Hamc
 
 Реализован устойчивый порядок зависимостей для ациклических графов.
 Результат сопоставлен с настоящим выводом Maven и проверен на тестовых графах.
+
+
+## Этап 5. Визуализация
+
+**Цель:** представить граф в Mermaid и показать зависимости в виде дерева.
+
+### 1. Mermaid и изображение
+
+Для каждой вершины создаётся внутренний идентификатор `n0`, `n1` и т. д.
+Координаты Maven помещаются в подписи. Сохраняются все рёбра графа,
+включая обратные. В HTML-странице Mermaid строит SVG-изображение.
+Исходник сохраняется рядом в `graph.mmd`. При обычном запуске страница
+открывается в браузере. Для работы изображения нужен доступ к CDN Mermaid.
+
+### 2. ASCII-дерево
+
+Флаг `--ascii-tree` дополнительно выводит дерево в терминал.
+Повторные вершины помечаются как `[уже показан]`, обратные рёбра как `[цикл]`.
+Это позволяет показать ромб и цикл, не раскрывая их бесконечно.
+Алгоритм дерева также использует стек.
+
+### 3. Три пакета
+
+Все команды ниже выполнены из `homework_2`. Для сохранения без открытия
+браузера использован `--no-open`. Созданы Mermaid и HTML для каждого пакета.
+
+```bash
+bash run.sh --package junit:junit:4.13.2 \
+  --repository https://repo.maven.apache.org/maven2/ \
+  --ascii-tree --no-open --output /tmp/cm-maven-comparison/junit/view
+bash run.sh --package org.hamcrest:hamcrest:2.2 \
+  --repository https://repo.maven.apache.org/maven2/ \
+  --ascii-tree --no-open --output /tmp/cm-maven-comparison/hamcrest/view
+bash run.sh --package org.slf4j:slf4j-simple:2.0.17 \
+  --repository https://repo.maven.apache.org/maven2/ \
+  --ascii-tree --no-open --output /tmp/cm-maven-comparison/slf4j-simple/view
+```
+
+Фактические результаты:
+
+```text
+junit:junit:4.13.2
+`-- org.hamcrest:hamcrest-core:1.3
+
+org.hamcrest:hamcrest:2.2
+
+org.slf4j:slf4j-simple:2.0.17
+`-- org.slf4j:slf4j-api:2.0.17
+```
+
+Полученные диаграммы:
+
+```mermaid
+flowchart TD
+    n0["junit:junit:4.13.2"]
+    n1["org.hamcrest:hamcrest-core:1.3"]
+    n0 --> n1
+```
+
+```mermaid
+flowchart TD
+    n0["org.hamcrest:hamcrest:2.2"]
+```
+
+```mermaid
+flowchart TD
+    n0["org.slf4j:slf4j-simple:2.0.17"]
+    n1["org.slf4j:slf4j-api:2.0.17"]
+    n0 --> n1
+```
+
+### 4. Сравнение со штатной визуализацией Maven
+
+Для каждого пакета создан отдельный минимальный POM с одной зависимостью.
+Формат такого POM для повторения проверки JUnit:
+
+```xml
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>demo</groupId>
+  <artifactId>comparison</artifactId>
+  <version>1</version>
+  <dependencies>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>4.13.2</version>
+    </dependency>
+  </dependencies>
+</project>
+```
+
+Для остальных двух проверок изменяются только координаты зависимости.
+Использована штатная текстовая визуализация `dependency:tree`:
+
+```bash
+mvn -B -ntp -f /tmp/cm-maven-comparison/hamcrest/pom.xml \
+  org.apache.maven.plugins:maven-dependency-plugin:3.8.1:tree \
+  org.apache.maven.plugins:maven-dependency-plugin:3.8.1:build-classpath \
+  -Dscope=runtime -DincludeScope=runtime \
+  -DoutputFile=/tmp/cm-maven-comparison/hamcrest/tree.txt \
+  -Dmdep.outputFile=/tmp/cm-maven-comparison/hamcrest/classpath.txt
+mvn -B -ntp -f /tmp/cm-maven-comparison/slf4j-simple/pom.xml \
+  org.apache.maven.plugins:maven-dependency-plugin:3.8.1:tree \
+  org.apache.maven.plugins:maven-dependency-plugin:3.8.1:build-classpath \
+  -Dscope=runtime -DincludeScope=runtime \
+  -DoutputFile=/tmp/cm-maven-comparison/slf4j-simple/tree.txt \
+  -Dmdep.outputFile=/tmp/cm-maven-comparison/slf4j-simple/classpath.txt
+```
+
+Обе команды завершились `BUILD SUCCESS`. Команда для JUnit приведена
+в этапе 4. Фактические деревья Maven:
+
+```text
+demo:comparison:jar:1
+\- junit:junit:jar:4.13.2:compile
+   \- org.hamcrest:hamcrest-core:jar:1.3:compile
+
+demo:comparison:jar:1
+\- org.hamcrest:hamcrest:jar:2.2:compile
+
+demo:comparison:jar:1
+\- org.slf4j:slf4j-simple:jar:2.0.17:compile
+   \- org.slf4j:slf4j-api:jar:2.0.17:compile
+```
+
+После удаления технического корня `comparison` состав вершин и рёбер
+для всех трёх пакетов совпадает. Maven дополнительно показывает тип JAR
+и scope, а собственная диаграмма подписывает координаты пакета.
+
+Для сложных POM возможны различия: программа сохраняет все встреченные
+точные версии и не выполняет Maven-медиацию nearest-wins, не активирует
+профили и не подключает репозитории из POM. Диапазоны версий и неизвестные
+свойства отклоняются с ошибкой. Поэтому инструмент не заменяет сборщик Maven.
+Правила scope и optional сверены с
+[документацией Maven](https://maven.apache.org/guides/introduction/introduction-to-dependency-mechanism.html),
+подключение Mermaid с [документацией Mermaid](https://mermaid.js.org/config/usage).
+
+### 5. Итоговая проверка
+
+Выполнено 44 автоматических теста, все успешно.
+Пять интеграционных тестов запускают настоящий CLI с локальным HTTP-сервером:
+проверяются прямые зависимости, транзитивный граф, порядок, ASCII и HTML,
+а также 404, повреждённый XML, неверный режим и ошибка каталога вывода.
+Проверки не требуют Internet и установленного Maven.
+
+Тест открытия браузера подтверждает передачу правильного file URI.
+Визуальное открытие локального HTML в проверочном браузере недоступно:
+его политика запрещает протокол `file://`. Поэтому наличие SVG на экране
+в этой среде не подтверждено. Mermaid-исходники приведены выше и доступны
+для просмотра диаграмм непосредственно в GitHub.
+
+### Вывод по этапу 5
+
+Реализованы Mermaid, HTML-страница с изображением и ASCII-дерево.
+Для трёх настоящих пакетов получены представления и выполнено сравнение
+со штатным деревом Maven. Результаты тестов и границы проверки указаны явно.
+
+
+## Итог по работе
+
+Выполнены пять этапов варианта 22. Замечания к коду K1, Ц1 и M1 исправлены,
+локальные проверки соответствующих правил прошли. Старые отчёты сохранены.
+Новые изменения оформлены отдельными коммитами со scope `homework-2`.
+
+Для допуска остаётся замечание C6 к 20 историческим коммитам.
+Их переименование потребует переписывания опубликованной истории,
+поэтому без отдельного согласования такая операция не выполнялась.
+Ограничение проверки изображения на экране указано в этапе 5.

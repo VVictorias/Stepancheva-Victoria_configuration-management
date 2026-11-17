@@ -5,6 +5,7 @@ import sys
 from .config import parse_args
 from .graph import adjacency_text, build_graph, dependency_order, traverse
 from .repository import MavenSource, TestRepository
+from .visualize import ascii_tree, mermaid_text, write_visualization
 
 
 RUNTIME_ERROR = 1
@@ -42,10 +43,22 @@ def execute(config):
         order = dependency_order(graph)
         print("\n".join(order) if order else "Зависимостей нет.")
         return
-    print(adjacency_text(graph))
+    if config.mode == "visualize":
+        show_visualization(graph, config)
+    else:
+        print(adjacency_text(graph))
     _, cycles = traverse(graph)
     for left, right in cycles:
         print(f"Цикл: {left} -> {right}", file=sys.stderr)
+
+
+def show_visualization(graph, config):
+    """Вывести Mermaid, необязательное дерево и открыть изображение."""
+    page = write_visualization(graph, config.output, not config.no_open)
+    print(mermaid_text(graph), end="")
+    if config.ascii_tree:
+        print(ascii_tree(graph))
+    print(f"Диаграмма: {page}")
 
 
 def main(argv=None):

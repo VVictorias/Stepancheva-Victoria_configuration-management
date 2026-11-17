@@ -275,3 +275,242 @@ usage: main.py [-h] --package PACKAGE --repository REPOSITORY
 
 `pycodestyle 2.15.0`, предел 79 символов: код 0, замечаний нет.
 `sh -n run.sh`: код 0.
+
+
+# Итоговая проверка этапов 1-5
+
+Дата: 17.11.2026. Среда: macOS, Python 3.14.9.
+Предыдущие результаты выше относятся к версии первого этапа.
+В текущей программе её поведение доступно через `--mode config`.
+
+## Автоматические тесты
+
+```bash
+python3 -B -m unittest discover -s tests -v
+```
+
+Код завершения 0. Последние строки реального протокола:
+
+```text
+
+----------------------------------------------------------------------
+Ran 44 tests in 3.595s
+
+OK
+```
+
+Покрыты CLI, разбор POM, parent, свойства, BOM с собственными свойствами,
+управляемые exclusions, metadata, сетевые ошибки, тестовый репозиторий,
+DFS, циклы, порядок, Mermaid, ASCII и запись HTML.
+Пять интеграционных тестов запускают настоящий CLI и локальный HTTP-сервер.
+Открытие браузера проверяется через mock, без заявления о реальном рендеринге.
+
+## Реальные команды программы
+
+```bash
+bash run.sh --package A --repository examples/repository.txt --test-repository --mode config
+```
+
+Код завершения: `0`.
+
+```text
+package=A
+repository=examples/repository.txt
+test_repository=true
+ascii_tree=false
+```
+
+```bash
+bash run.sh --package junit:junit:4.13.2 --repository https://repo.maven.apache.org/maven2/ --mode direct
+```
+
+Код завершения: `0`.
+
+```text
+org.hamcrest:hamcrest-core:1.3
+org.hamcrest:hamcrest-library:1.3
+```
+
+```bash
+bash run.sh --package A --repository examples/chain.txt --test-repository --mode order
+```
+
+Код завершения: `0`.
+
+```text
+C
+B
+```
+
+```bash
+bash run.sh --package A --repository examples/diamond.txt --test-repository --mode order
+```
+
+Код завершения: `0`.
+
+```text
+D
+B
+C
+```
+
+```bash
+bash run.sh --package A --repository examples/leaf.txt --test-repository --mode order
+```
+
+Код завершения: `0`.
+
+```text
+Зависимостей нет.
+```
+
+```bash
+bash run.sh --package A --repository examples/cycle.txt --test-repository --mode order
+```
+
+Код завершения: `1`.
+
+```text
+Ошибка: порядок загрузки невозможен, есть цикл: C -> A
+```
+
+```bash
+bash run.sh --package A --repository examples/cycle.txt --test-repository --ascii-tree --no-open --output /tmp/cm-maven-comparison/cycle/view
+```
+
+Код завершения: `0`.
+
+```text
+flowchart TD
+    n0["A"]
+    n1["B"]
+    n2["C"]
+    n0 --> n1
+    n1 --> n2
+    n2 --> n0
+A
+`-- B
+    `-- C
+        `-- A [цикл]
+Диаграмма: /private/tmp/cm-maven-comparison/cycle/view/graph.html
+Цикл: C -> A
+```
+
+## Maven Central и сравнение
+
+Реальные обращения выполнены для `junit:junit:4.13.2`,
+`org.hamcrest:hamcrest:2.2`, `org.slf4j:slf4j-simple:2.0.17`.
+Для каждого создан отдельный POM с одной зависимостью.
+Apache Maven 3.9.11, Java 26.0.1, maven-dependency-plugin 3.8.1.
+Команды `tree` и `build-classpath` завершились `BUILD SUCCESS`.
+Команды и POM для повторения проверки приведены в основном отчёте.
+
+Сохранённый вывод Maven:
+
+### junit
+
+```text
+demo:comparison:jar:1
+\- junit:junit:jar:4.13.2:compile
+   \- org.hamcrest:hamcrest-core:jar:1.3:compile
+```
+
+Classpath в порядке Maven, без локальных путей:
+
+```text
+junit-4.13.2.jar
+hamcrest-core-1.3.jar
+```
+
+Собственный Mermaid-исходник:
+
+```mermaid
+flowchart TD
+    n0["junit:junit:4.13.2"]
+    n1["org.hamcrest:hamcrest-core:1.3"]
+    n0 --> n1
+```
+
+### hamcrest
+
+```text
+demo:comparison:jar:1
+\- org.hamcrest:hamcrest:jar:2.2:compile
+```
+
+Classpath в порядке Maven, без локальных путей:
+
+```text
+hamcrest-2.2.jar
+```
+
+Собственный Mermaid-исходник:
+
+```mermaid
+flowchart TD
+    n0["org.hamcrest:hamcrest:2.2"]
+```
+
+### slf4j-simple
+
+```text
+demo:comparison:jar:1
+\- org.slf4j:slf4j-simple:jar:2.0.17:compile
+   \- org.slf4j:slf4j-api:jar:2.0.17:compile
+```
+
+Classpath в порядке Maven, без локальных путей:
+
+```text
+slf4j-simple-2.0.17.jar
+slf4j-api-2.0.17.jar
+```
+
+Собственный Mermaid-исходник:
+
+```mermaid
+flowchart TD
+    n0["org.slf4j:slf4j-simple:2.0.17"]
+    n1["org.slf4j:slf4j-api:2.0.17"]
+    n0 --> n1
+```
+
+## Проверка оформления всего репозитория
+
+```bash
+pycodestyle --max-line-length=80 src tests homework_2/src homework_2/tests
+radon cc src tests homework_2/src homework_2/tests -s -n C
+sh -n homework_2/run.sh
+bash -n run.sh tests/test_all.sh tests/test_script.sh tests/test_vfs.sh \
+  tests/test_vfs_minimal.sh tests/test_vfs_multiple.sh tests/test_vfs_nested.sh
+```
+
+Команды выполнены из корня репозитория, коды 0, замечаний нет.
+Использованы pycodestyle 2.15.0 и Radon 6.0.1.
+Дополнительно проведена проверка AST и Python-токенов по требованиям методички:
+
+- Проверено Python-файлов: 18.
+- Самая длинная функция: 34 строки при пределе 40.
+- Максимальная цикломатическая сложность: 10 при пределе 10.
+- Docstring есть у всех модулей, классов и функций.
+- Комментариев в Python-коде нет.
+- Строк Python длиннее 80 символов, функций с более чем 7 аргументами нет.
+- Большие числовые литералы в сравнениях не найдены.
+- Генерируемые HTML, архивы и двоичные файлы в Git не добавлены.
+
+Проверка первой домашней работы выполнена отдельно во временном каталоге:
+созданы три VFS-архива, проверены количество записей, содержимое и SHA-256.
+Команды `ls`, `cd`, неизвестная команда, `vfs-info`, `exit` проверены
+с подменой только Tkinter; настоящее графическое окно не запускалось.
+Результат: `OK`.
+
+## Оставшиеся ограничения
+
+Политика проверочного браузера запрещает `file://`, поэтому фактический
+рендеринг HTML на экране не подтверждён. Файлы Mermaid и HTML сформированы,
+проверены тестами; три Mermaid-диаграммы включены в основной отчёт.
+
+Историческое замечание C6 остаётся. Найдено 20 старых коммитов без нужного
+Conventional/Scoped-формата. Они сохранены, опубликованная история не переписана.
+Новые коммиты соответствуют формату. Допуск преподавательской проверкой
+в этом протоколе не заявляется.

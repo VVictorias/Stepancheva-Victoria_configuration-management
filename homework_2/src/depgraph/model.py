@@ -57,10 +57,11 @@ def expand(value, properties):
 def declaration(element):
     """Прочитать поля зависимости, включая exclusions."""
     values = {child.tag: (child.text or "").strip() for child in element}
-    values["exclusions"] = frozenset(
-        (item.findtext("groupId", ""), item.findtext("artifactId", ""))
-        for item in element.findall("exclusions/exclusion")
-    )
+    if element.find("exclusions") is not None:
+        values["exclusions"] = frozenset(
+            (item.findtext("groupId", ""), item.findtext("artifactId", ""))
+            for item in element.findall("exclusions/exclusion")
+        )
     return values
 
 

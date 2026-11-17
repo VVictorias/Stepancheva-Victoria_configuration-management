@@ -152,8 +152,11 @@ class MavenRepository:
                     values.get(key, "")
                     for key in ("groupId", "artifactId", "version")
                 )
-                for key, value in self.model(package).managed.items():
-                    imported.setdefault(key, value)
+                bom = self.model(package)
+                for key, value in bom.managed.items():
+                    imported.setdefault(
+                        key, resolved_fields(value, bom.properties)
+                    )
             else:
                 local.append((dependency_key(values), raw))
         model.managed.update(imported)

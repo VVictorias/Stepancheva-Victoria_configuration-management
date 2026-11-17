@@ -1,4 +1,4 @@
-"""Приём и проверка конфигурации прототипа Maven, этап 1."""
+"""Приём и проверка конфигурации инструмента Java Maven."""
 
 import argparse
 import ipaddress
@@ -37,7 +37,7 @@ class ConfigParser(argparse.ArgumentParser):
 def build_parser():
     """Описать четыре параметра варианта 22 и встроенную справку."""
     parser = ConfigParser(
-        description="Maven: этап 1, только проверка и вывод конфигурации.",
+        description="Граф зависимостей Java Maven, вариант 22.",
         allow_abbrev=False,
     )
     parser.add_argument(
@@ -58,15 +58,29 @@ def build_parser():
     parser.add_argument(
         "--ascii-tree",
         action="store_true",
-        help="сохранить настройку ASCII-дерева; значение не требуется",
+        help="дополнительно вывести ASCII-дерево в режиме visualize",
     )
     parser.add_argument(
         "--mode",
-        choices=("config", "direct", "graph", "order"),
-        default="graph",
-        help="config: настройки; direct: прямые зависимости; graph: граф",
+        choices=("config", "direct", "graph", "order", "visualize"),
+        default="visualize",
+        help="выбрать этап: config, direct, graph, order или visualize",
     )
+    add_visualization_options(parser)
     return parser
+
+
+def add_visualization_options(parser):
+    """Добавить каталог результата и запуск без браузера для проверок."""
+    parser.add_argument(
+        "--output",
+        help="каталог для graph.mmd и graph.html",
+    )
+    parser.add_argument(
+        "--no-open",
+        action="store_true",
+        help="сохранить диаграмму без открытия браузера",
+    )
 
 
 def validate_package(value, test_mode):
@@ -164,10 +178,12 @@ def validate_file(value):
 
 
 def parse_args(argv=None):
-    """Прочитать и проверить настройки первого этапа."""
+    """Прочитать настройки и проверить значения до выполнения операции."""
     parser = build_parser()
     config = parser.parse_args(argv)
     try:
+        if config.output is not None and not config.output.strip():
+            raise ValueError("--output: каталог вывода не может быть пустым")
         validate_package(config.package, config.test_repository)
         if config.test_repository:
             validate_file(config.repository)

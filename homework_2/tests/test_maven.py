@@ -79,8 +79,9 @@ class MavenTests(unittest.TestCase):
     def test_bom_and_cache(self):
         """Импортировать BOM и повторно не загружать готовую модель."""
         bom = (
+            "<properties><bom.version>1</bom.version></properties>"
             "<dependencyManagement><dependencies>"
-            + dep()
+            + dep(version="${bom.version}")
             + "</dependencies></dependencyManagement>"
         )
         root = (
@@ -94,6 +95,24 @@ class MavenTests(unittest.TestCase):
         self.assertEqual(repo.direct("g:a:1")[0].package, "g:b:1")
         repo.document = lambda path: self.fail("cache miss")
         self.assertEqual(repo.direct("g:a:1")[0].package, "g:b:1")
+
+    def test_managed_exclusions(self):
+        """Не потерять exclusions, заданные через dependencyManagement."""
+        exclusions = (
+            "<exclusions><exclusion><groupId>x</groupId>"
+            "<artifactId>*</artifactId></exclusion></exclusions>"
+        )
+        body = (
+            "<dependencyManagement><dependencies>"
+            + dep(extra=exclusions)
+            + "</dependencies></dependencyManagement><dependencies>"
+            "<dependency><groupId>g</groupId><artifactId>b</artifactId>"
+            "</dependency></dependencies>"
+        )
+        repo = self.repo({"g/a/1/a-1.pom": body})
+        self.assertEqual(
+            repo.direct("g:a:1")[0].exclusions, frozenset({("x", "*")})
+        )
 
     def test_empty_and_bad_pom(self):
         """Лист не имеет зависимостей; повреждённый XML вызывает ошибку."""

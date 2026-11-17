@@ -1,4 +1,4 @@
-"""Запуск прототипа инструмента зависимостей Java Maven."""
+"""Запуск инструмента зависимостей Java Maven."""
 
 from depgraph.cli import main
 
