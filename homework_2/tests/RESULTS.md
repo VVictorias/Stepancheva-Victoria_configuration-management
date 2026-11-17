@@ -403,7 +403,7 @@ A
 Для каждого создан отдельный POM с одной зависимостью.
 Apache Maven 3.9.11, Java 26.0.1, maven-dependency-plugin 3.8.1.
 Команды `tree` и `build-classpath` завершились `BUILD SUCCESS`.
-Команды и POM для повторения проверки приведены в основном отчёте.
+Пример POM и команды сравнения приведены в конце протокола.
 
 Сохранённый вывод Maven:
 
@@ -514,3 +514,43 @@ bash -n run.sh tests/test_all.sh tests/test_script.sh tests/test_vfs.sh \
 Conventional/Scoped-формата. Они сохранены, опубликованная история не переписана.
 Новые коммиты соответствуют формату. Допуск преподавательской проверкой
 в этом протоколе не заявляется.
+
+
+## POM и команды сравнения с Maven
+
+Для каждого пакета использован отдельный проект с одной зависимостью.
+Пример POM для JUnit:
+
+```xml
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>demo</groupId>
+  <artifactId>comparison</artifactId>
+  <version>1</version>
+  <dependencies>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>4.13.2</version>
+    </dependency>
+  </dependencies>
+</project>
+```
+
+Для Hamcrest и SLF4J Simple заменены координаты зависимости.
+Команды сравнения для этих двух пакетов:
+
+```bash
+mvn -B -ntp -f /tmp/cm-maven-comparison/hamcrest/pom.xml \
+  org.apache.maven.plugins:maven-dependency-plugin:3.8.1:tree \
+  org.apache.maven.plugins:maven-dependency-plugin:3.8.1:build-classpath \
+  -Dscope=runtime -DincludeScope=runtime \
+  -DoutputFile=/tmp/cm-maven-comparison/hamcrest/tree.txt \
+  -Dmdep.outputFile=/tmp/cm-maven-comparison/hamcrest/classpath.txt
+mvn -B -ntp -f /tmp/cm-maven-comparison/slf4j-simple/pom.xml \
+  org.apache.maven.plugins:maven-dependency-plugin:3.8.1:tree \
+  org.apache.maven.plugins:maven-dependency-plugin:3.8.1:build-classpath \
+  -Dscope=runtime -DincludeScope=runtime \
+  -DoutputFile=/tmp/cm-maven-comparison/slf4j-simple/tree.txt \
+  -Dmdep.outputFile=/tmp/cm-maven-comparison/slf4j-simple/classpath.txt
+```
