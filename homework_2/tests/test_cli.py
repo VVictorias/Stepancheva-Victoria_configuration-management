@@ -15,7 +15,7 @@ CLI = ROOT / "src" / "main.py"
 FIXTURE = ROOT / "examples" / "repository.txt"
 PACKAGE = "org.apache.commons:commons-lang3:3.12.0"
 URL = "https://repo.maven.apache.org/maven2/"
-BASE = ["--package", PACKAGE, "--repository", URL]
+BASE = ["--package", PACKAGE, "--repository", URL, "--mode", "config"]
 sys.path.insert(0, str(ROOT / "src"))
 validate_file = import_module("depgraph.config").validate_file
 
@@ -26,7 +26,7 @@ class CliTests(unittest.TestCase):
     def run_cli(self, args, cwd=None):
         """Запустить настоящее приложение с переданными аргументами."""
         return subprocess.run(
-            [sys.executable, str(CLI), *args],
+            [sys.executable, str(CLI), "--mode", "config", *args],
             cwd=cwd,
             capture_output=True,
             text=True,
@@ -276,6 +276,8 @@ class CliTests(unittest.TestCase):
                 [
                     "sh",
                     str(ROOT / "run.sh"),
+                    "--mode",
+                    "config",
                     "--package",
                     "A",
                     "--repository",
