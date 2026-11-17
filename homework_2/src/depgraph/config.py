@@ -61,8 +61,10 @@ def build_parser():
         help="сохранить настройку ASCII-дерева; значение не требуется",
     )
     parser.add_argument(
-        "--mode", choices=("config", "direct"), default="direct",
-        help="config: настройки; direct: прямые зависимости",
+        "--mode",
+        choices=("config", "direct", "graph"),
+        default="graph",
+        help="config: настройки; direct: прямые зависимости; graph: граф",
     )
     return parser
 
