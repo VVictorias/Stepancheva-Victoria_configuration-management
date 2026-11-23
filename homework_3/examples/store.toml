@@ -1,0 +1,6 @@
+product = "Клавиатура"
+price = 1290
+discount = 200
+final_price = 1090
+category = "A"
+category_code = 65

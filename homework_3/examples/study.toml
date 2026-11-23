@@ -1,0 +1,8 @@
+title = "Тренажёр по Python"
+topics = 5
+total_topics = 7
+activities = [
+    "Чтение",
+    "Практика",
+    "Тест",
+]
