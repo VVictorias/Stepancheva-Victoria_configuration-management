@@ -21,9 +21,12 @@
 Нужен Python 3.9 или новее. Команды выполняются из папки `practice_3`.
 
 ```bash
+bash run.sh assemble --input examples/control.asm --output control.bin --ir
 bash run.sh assemble --input examples/control.asm --output control.bin --test
 python3 -B -m unittest discover -s tests -v
 ```
 
-На первом этапе ассемблер показывает поля A и B. Путь `--output` принят
-как параметр для следующего этапа.
+Ассемблер читает исходник из `--input`, записывает байты в `--output` и
+выводит число команд. Флаг `--ir` показывает поля A и B для первого этапа,
+а `--test` показывает байты каждой команды. Команда `LOAD` занимает 4 байта,
+остальные команды занимают по 3 байта. Порядок байтов от младшего к старшему.

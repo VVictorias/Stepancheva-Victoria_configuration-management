@@ -34,17 +34,18 @@ class AssemblerTests(unittest.TestCase):
     def assert_bad_source(self, source, message):
         """Проверить, что ошибка указывает строку и её причину."""
         self.source.write_text("# первая строка\n" + source, encoding="utf-8")
-        result = self.assemble(self.source, "--test")
+        result = self.assemble(self.source, "--ir")
         self.assertEqual(result.returncode, 1)
         self.assertIn("строка 2:", result.stderr)
         self.assertIn(message, result.stderr)
 
     def test_control_fields(self):
         """Сравнить поля четырёх контрольных команд с методичкой."""
-        result = self.assemble(CONTROL, "--test")
+        result = self.assemble(CONTROL, "--ir")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.splitlines(), [
             "A=0, B=197", "A=11, B=93", "A=3, B=959", "A=5, B=654",
+            "Ассемблировано команд: 4",
         ])
 
     def test_operand_limits(self):
@@ -55,11 +56,12 @@ class AssemblerTests(unittest.TestCase):
             "BSWAP 0\nBSWAP 65535\n",
             encoding="utf-8",
         )
-        result = self.assemble(self.source, "--test")
+        result = self.assemble(self.source, "--ir")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.splitlines(), [
             "A=0, B=0", "A=0, B=268435455", "A=11, B=0", "A=11, B=65535",
             "A=3, B=0", "A=3, B=65535", "A=5, B=0", "A=5, B=65535",
+            "Ассемблировано команд: 8",
         ])
 
     def test_bad_syntax(self):
@@ -85,7 +87,36 @@ class AssemblerTests(unittest.TestCase):
 
     def test_missing_input(self):
         """Проверить сообщение при отсутствии исходного файла."""
-        result = self.assemble(self.source, "--test")
+        result = self.assemble(self.source, "--ir")
         self.assertEqual(result.returncode, 1)
         self.assertIn(str(self.source), result.stderr)
         self.assertFalse(self.output.exists())
+
+    def test_control_bytes(self):
+        """Сверить бинарный файл и вывод с четырьмя примерами задания."""
+        result = self.assemble(CONTROL, "--test")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            self.output.read_bytes(),
+            bytes.fromhex("50 0C 00 00 DB 05 00 F3 3B 00 E5 28 00"),
+        )
+        self.assertEqual(result.stdout.splitlines(), [
+            "0x50, 0x0C, 0x00, 0x00",
+            "0xDB, 0x05, 0x00",
+            "0xF3, 0x3B, 0x00",
+            "0xE5, 0x28, 0x00",
+            "Ассемблировано команд: 4",
+        ])
+
+    def test_bad_output(self):
+        """Сообщить об ошибке, если родительской папки выхода нет."""
+        self.output = self.output.parent / "absent" / self.output.name
+        result = self.assemble(CONTROL)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn(str(self.output), result.stderr)
+
+    def test_bad_source_keeps_output(self):
+        """Сохранить существующий файл при ошибке разбора."""
+        self.output.write_bytes(b"previous")
+        self.assert_bad_source("LOAD bad", "неверное число")
+        self.assertEqual(self.output.read_bytes(), b"previous")

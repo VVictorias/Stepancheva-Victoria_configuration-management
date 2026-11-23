@@ -1,10 +1,10 @@
-"""Разбор программ учебной виртуальной машины."""
+"""Ассемблер учебной виртуальной машины."""
 
 import argparse
 import sys
 from pathlib import Path
 
-from isa import OPCODES, OPERAND_MASKS
+from isa import COMMAND_SIZES, OP_BITS, OPCODES, OPERAND_MASKS
 
 ARGUMENT_COUNT = 2
 
@@ -23,7 +23,9 @@ def parse_line(text, number):
     try:
         operand = int(token, base)
     except ValueError:
-        raise ValueError(f"строка {number}: неверное число {token!r}") from None
+        raise ValueError(
+            f"строка {number}: неверное число {token!r}"
+        ) from None
 
     opcode = OPCODES[name]
     limit = OPERAND_MASKS[opcode]
@@ -48,20 +50,44 @@ def show_ir(commands):
         print(f"A={opcode}, B={operand}")
 
 
+def encode(opcode, operand):
+    """Упаковать A и B в байты от младшего к старшему."""
+    word = (operand << OP_BITS) | opcode
+    return word.to_bytes(COMMAND_SIZES[opcode], "little")
+
+
+def show_bytes(chunks):
+    """Вывести байты каждой команды в формате методички."""
+    for chunk in chunks:
+        print(", ".join(f"0x{byte:02X}" for byte in chunk))
+
+
 def main():
-    """Прочитать текстовый файл и запустить разбор."""
+    """Ассемблировать файл и вывести результат выбранного режима."""
     parser = argparse.ArgumentParser(description="Ассемблер УВМ, вариант 22")
     parser.add_argument("--input", type=Path, required=True, help="текст УВМ")
-    parser.add_argument("--output", type=Path, required=True, help="выходной файл")
-    parser.add_argument("--test", action="store_true", help="показать поля A и B")
+    parser.add_argument(
+        "--output", type=Path, required=True, help="двоичный файл"
+    )
+    parser.add_argument(
+        "--test", action="store_true", help="показать машинные байты"
+    )
+    parser.add_argument(
+        "--ir", action="store_true", help="показать поля A и B"
+    )
     args = parser.parse_args()
     try:
         commands = parse_program(args.input.read_text(encoding="utf-8"))
+        chunks = [encode(opcode, operand) for opcode, operand in commands]
+        args.output.write_bytes(b"".join(chunks))
     except (OSError, ValueError) as error:
         print(f"Ошибка: {error}", file=sys.stderr)
         return 1
-    if args.test:
+    if args.ir:
         show_ir(commands)
+    if args.test:
+        show_bytes(chunks)
+    print(f"Ассемблировано команд: {len(commands)}")
     return 0
 
 
