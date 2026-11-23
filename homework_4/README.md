@@ -1,4 +1,4 @@
-# Практическая работа №3
+# Домашняя работа №4
 
 **Вариант 22.** Ассемблер и интерпретатор учебной виртуальной машины.
 
@@ -18,7 +18,7 @@
 
 ## Запуск
 
-Нужен Python 3.9 или новее. Команды выполняются из папки `practice_3`.
+Нужен Python 3.9 или новее. Команды выполняются из папки `homework_4`.
 
 ```bash
 bash run.sh assemble --input examples/control.asm --output control.bin --ir
@@ -88,4 +88,4 @@ for name in vector_bytes vector_edges vector_small; do
 done
 ```
 
-[Отчёт](../practice_3.md) · [Результаты тестов](tests/RESULTS.md)
+[Отчёт](../homework_4.md) · [Результаты тестов](tests/RESULTS.md)

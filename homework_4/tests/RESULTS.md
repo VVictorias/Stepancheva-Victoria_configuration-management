@@ -1,6 +1,6 @@
 # Результаты тестирования
 
-Запуск из папки `practice_3`.
+Запуск из папки `homework_4`.
 
 ```bash
 python3 -B -m unittest discover -s tests -v
