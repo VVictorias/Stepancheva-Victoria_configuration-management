@@ -1,0 +1,28 @@
+"""Коды операций, размеры команд и границы полей варианта 22."""
+
+OP_LOAD = 0
+OP_READ = 11
+OP_STORE = 3
+OP_BSWAP = 5
+
+OP_BITS = 4
+OP_MASK = (1 << OP_BITS) - 1
+CONST_BITS = 28
+ADDRESS_BITS = 16
+CONST_MASK = (1 << CONST_BITS) - 1
+ADDRESS_MASK = (1 << ADDRESS_BITS) - 1
+LOAD_SIZE = 4
+SHORT_SIZE = 3
+
+OPCODES = {
+    "LOAD": OP_LOAD,
+    "READ": OP_READ,
+    "STORE": OP_STORE,
+    "BSWAP": OP_BSWAP,
+}
+OPERAND_MASKS = {
+    OP_LOAD: CONST_MASK,
+    OP_READ: ADDRESS_MASK,
+    OP_STORE: ADDRESS_MASK,
+    OP_BSWAP: ADDRESS_MASK,
+}
