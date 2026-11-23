@@ -9,6 +9,7 @@ from isa import (
     ADDRESS_MASK,
     COMMAND_SIZES,
     OP_BITS,
+    OP_BSWAP,
     OP_LOAD,
     OP_MASK,
     OP_READ,
@@ -54,6 +55,11 @@ def write_word(memory, address, value):
     memory[start:start + WORD_SIZE] = value.to_bytes(WORD_SIZE, "little")
 
 
+def swap_bytes(value):
+    """Развернуть четыре байта беззнакового слова."""
+    return int.from_bytes(value.to_bytes(WORD_SIZE, "little"), "big")
+
+
 def run_program(binary):
     """Загрузить машинный код по адресу 0 и выполнить его до конца."""
     end = len(binary)
@@ -71,8 +77,8 @@ def run_program(binary):
             accumulator = read_word(memory, accumulator + operand)
         elif opcode == OP_STORE:
             write_word(memory, operand, accumulator)
-        else:
-            raise ValueError(f"байт {pc}: операция ещё не реализована")
+        elif opcode == OP_BSWAP:
+            accumulator = swap_bytes(read_word(memory, operand))
         pc += size
     return memory
 

@@ -152,3 +152,32 @@ class InterpreterTests(unittest.TestCase):
         result = self.interpret(100, 107)
         self.assertEqual(result.returncode, 1)
         self.assertIn(str(self.dump), result.stderr)
+
+    def test_bswap_example(self):
+        """Проверить исходное и переставленное слово в XML."""
+        self.assemble(EXAMPLES / "bswap.asm")
+        result = self.interpret(100, 101)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assert_dump(100, [0x01020304, 0x04030201])
+
+    def test_bswap_in_memory(self):
+        """Выполнить BSWAP на нуле, повторе байтов и граничных словах."""
+        self.assert_program(
+            "LOAD 0\nSTORE 100\nBSWAP 100\nSTORE 100\n"
+            "LOAD 0x0A0A0A0A\nSTORE 101\nBSWAP 101\nSTORE 101\n"
+            "LOAD 0x80\nSTORE 102\nBSWAP 102\nSTORE 102\n"
+            "BSWAP 102\nSTORE 103\n"
+            "LOAD 0x0FFFFFFF\nSTORE 104\nBSWAP 104\nSTORE 104\n"
+            "BSWAP 104\nSTORE 105\n",
+            100, [0, 0x0A0A0A0A, 0x80000000, 0x80, 0xFFFFFF0F, 0x0FFFFFFF],
+        )
+
+    def test_bswap_full_word_bounds(self):
+        """Проверить крайние значения 32-битной операции отдельно."""
+        from unittest.mock import patch
+
+        with patch.object(sys, "path", [str(INTERPRETER.parent), *sys.path]):
+            from interpreter import swap_bytes
+
+        self.assertEqual(swap_bytes(0), 0)
+        self.assertEqual(swap_bytes(0xFFFFFFFF), 0xFFFFFFFF)
