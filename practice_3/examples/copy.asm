@@ -1,0 +1,23 @@
+# Исходный массив в словах 100–103
+LOAD 197
+STORE 100
+LOAD 0
+STORE 101
+LOAD 54321
+STORE 102
+LOAD 268435455
+STORE 103
+
+# Чтение по базовому адресу со смещением, запись в слова 104–107
+LOAD 100
+READ 0
+STORE 104
+LOAD 100
+READ 1
+STORE 105
+LOAD 100
+READ 2
+STORE 106
+LOAD 100
+READ 3
+STORE 107

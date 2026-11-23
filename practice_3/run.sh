@@ -7,8 +7,12 @@ case "${1:-}" in
         shift
         exec python3 -B "$dir/src/assembler.py" "$@"
         ;;
+    interpret)
+        shift
+        exec python3 -B "$dir/src/interpreter.py" "$@"
+        ;;
     *)
-        echo "Использование: bash run.sh assemble --help" >&2
+        echo "Использование: bash run.sh {assemble|interpret} --help" >&2
         exit 2
         ;;
 esac
