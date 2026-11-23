@@ -181,3 +181,34 @@ class InterpreterTests(unittest.TestCase):
 
         self.assertEqual(swap_bytes(0), 0)
         self.assertEqual(swap_bytes(0xFFFFFFFF), 0xFFFFFFFF)
+
+    def assert_vector(self, name, expected):
+        """Запустить пример и проверить все девять исходных адресов."""
+        self.assemble(EXAMPLES / name)
+        result = self.interpret(100, 108)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assert_dump(100, expected)
+
+    def test_vector_bytes(self):
+        """Сверить вектор с байтами в разных позициях."""
+        self.assert_vector("vector_bytes.asm", [
+            0x04030201, 0x33221100, 0x01000000,
+            0x00010000, 0x00000100, 0x00000001,
+            0xFFAA5500, 0x0D0C0B0A, 0x5634120F,
+        ])
+
+    def test_vector_edges(self):
+        """Сверить вектор с повторяющимися и граничными значениями."""
+        self.assert_vector("vector_edges.asm", [
+            0x00000000, 0x0A0A0A0A, 0x00ABAB00,
+            0xF0FF0F00, 0x80000000, 0xFF000000,
+            0xFFFFFF0F, 0x00000008, 0xFE807F00,
+        ])
+
+    def test_vector_small(self):
+        """Сверить вектор с небольшими десятичными числами."""
+        self.assert_vector("vector_small.asm", [
+            0x01000000, 0x02000000, 0x03000000,
+            0x07000000, 0x0F000000, 0x1F000000,
+            0x3F000000, 0x7F000000, 0xFF000000,
+        ])

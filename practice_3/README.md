@@ -69,3 +69,17 @@ bash run.sh assemble --input examples/bswap.asm --output bswap.bin
 bash run.sh interpret --input bswap.bin --output bswap.xml --range 100 101
 cat bswap.xml
 ```
+
+## Векторы из девяти элементов
+
+Программы `vector_bytes.asm`, `vector_edges.asm` и `vector_small.asm`
+заполняют слова 100–108 и сохраняют преобразованные элементы в тех же
+словах. Каждая программа состоит из 36 команд.
+
+```bash
+for name in vector_bytes vector_edges vector_small; do
+  bash run.sh assemble --input "examples/$name.asm" --output "$name.bin"
+  bash run.sh interpret --input "$name.bin" --output "$name.xml" --range 100 108
+  cat "$name.xml"
+done
+```
