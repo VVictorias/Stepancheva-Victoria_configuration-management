@@ -6,10 +6,9 @@ declaration: value _WS? "->" _WS? NAME
       | array
       | expression
 
-array: _LIST _WS? "(" _WS? [items] ")"
-items: value _WS? ("," _WS? value _WS?)*
+array: _LIST _WS? "(" _WS? [value _WS? ("," _WS? value _WS?)*] ")"
 
-expression: "?{" _WS? operation _WS? "}"
+?expression: "?{" _WS? operation _WS? "}"
 ?operation: "+" _WS operand _WS operand -> add
           | "-" _WS operand _WS operand -> subtract
           | "ord" _WS operand            -> char_code
