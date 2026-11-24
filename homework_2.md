@@ -109,8 +109,33 @@ Classpath задаёт порядок поиска классов. `order` по�
 
 ```bash
 bash run.sh --package junit:junit:4.13.2 --repository https://repo.maven.apache.org/maven2/ --ascii-tree
+```
+
+```mermaid
+flowchart TD
+    n0["junit:junit:4.13.2"]
+    n1["org.hamcrest:hamcrest-core:1.3"]
+    n0 --> n1
+```
+
+```bash
 bash run.sh --package org.hamcrest:hamcrest:2.2 --repository https://repo.maven.apache.org/maven2/ --ascii-tree
+```
+
+```mermaid
+flowchart TD
+    n0["org.hamcrest:hamcrest:2.2"]
+```
+
+```bash
 bash run.sh --package org.slf4j:slf4j-simple:2.0.17 --repository https://repo.maven.apache.org/maven2/ --ascii-tree
+```
+
+```mermaid
+flowchart TD
+    n0["org.slf4j:slf4j-simple:2.0.17"]
+    n1["org.slf4j:slf4j-api:2.0.17"]
+    n0 --> n1
 ```
 
 ASCII-деревья из вывода программы
