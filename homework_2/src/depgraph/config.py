@@ -2,7 +2,6 @@
 
 import argparse
 import re
-import sys
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -23,13 +22,18 @@ class ConfigParser(argparse.ArgumentParser):
 
     def error(self, message):
         """Завершить работу с кодом 2."""
-        self.print_usage(sys.stderr)
+        flag = re.fullmatch(
+            r"argument (--[\w-]+): ignored explicit argument .+", message
+        )
+        if flag:
+            message = f"{flag[1]}: флаг передаётся без значения"
         self.exit(USAGE_ERROR, f"Ошибка: {message}\nСправка: --help\n")
 
 
 def build_parser():
     """Описать параметры командной строки."""
     parser = ConfigParser(
+        prog="bash run.sh",
         description="Граф зависимостей Java Maven, вариант 22.",
         allow_abbrev=False,
     )
@@ -46,7 +50,8 @@ def build_parser():
         help="прочитать локальный тестовый файл",
     )
     parser.add_argument(
-        "--ascii-tree", action="store_true", help="добавить ASCII-дерево",
+        "--ascii-tree", action="store_true",
+        help="вывести ASCII-дерево в режиме visualize",
     )
     parser.add_argument(
         "--mode", choices=("config", "direct", "graph", "order", "visualize"),
