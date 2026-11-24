@@ -61,19 +61,13 @@ def html_page(graph, diagram):
     """Создать HTML со встроенным исходником и графическим SVG Mermaid."""
     title = escape(graph.root)
     return f"""<!doctype html>
-<html lang="ru"><meta charset="utf-8">
+<html lang="ru">
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Граф зависимостей {title}</title>
-<style>
-body {{font:16px system-ui; margin:32px; color:#17263c; background:#f5f7fb}}
-main {{max-width:1100px; margin:auto}}
-section {{background:white; padding:24px; border-radius:12px; overflow:auto}}
-h1 {{font-size:24px}} pre {{white-space:pre-wrap}} svg {{min-height:180px}}
-</style><main><h1>{title}</h1><p>Граф зависимостей Java Maven</p>
-<section><p id="status">Построение диаграммы...</p>
-<pre class="mermaid">{escape(diagram)}</pre></section>
-<details><summary>Исходник Mermaid</summary>
-<pre>{escape(diagram)}</pre></details>
+<h1>{title}</h1>
+<p id="status">Построение диаграммы...</p>
+<pre class="mermaid">{escape(diagram)}</pre>
 <script type="module">
 try {{
  const {{default: mermaid}} = await import('{MERMAID_MODULE}');
@@ -84,7 +78,8 @@ try {{
  document.getElementById('status').textContent =
   'Не удалось построить диаграмму. Проверьте доступ к CDN Mermaid: ' + error;
 }}
-</script></main></html>
+</script>
+</html>
 """
 
 

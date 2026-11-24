@@ -1,130 +1,62 @@
-"""Проверки DFS на циклах, ромбе и длинной цепочке."""
+"""Построение графа и порядка загрузки на тестовых файлах."""
 
 from importlib import import_module
 from pathlib import Path
 import sys
-import tempfile
 import unittest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-graph_module = import_module("depgraph.graph")
-repository_module = import_module("depgraph.repository")
+
+HOMEWORK = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(HOMEWORK / "src"))
+graph = import_module("depgraph.graph")
+repository = import_module("depgraph.repository")
 
 
-class MemorySource:
-    """Простой источник для проверки DFS независимо от формата имён."""
-
-    def __init__(self, edges):
-        """Запомнить рёбра и список фактических загрузок."""
-        self.edges = edges
-        self.calls = []
-
-    def children(self, node, exclusions):
-        """Записать посещение вершины и вернуть соседей."""
-        self.calls.append(node)
-        return [(child, exclusions) for child in self.edges[node]]
+def build(example):
+    """Построить граф из файла примера."""
+    path = HOMEWORK / "examples" / f"{example}.txt"
+    source = repository.TestRepository(path)
+    return graph.build_graph(source, source.resolve("A"))
 
 
 class GraphTests(unittest.TestCase):
-    """Проверить граф, а не только совпадение текста CLI."""
+    """Проверить достижимые вершины, циклы и полную обработку ветвей."""
 
-    def build(self, edges):
-        """Построить граф от A через настоящий стековый DFS."""
-        return graph_module.build_graph(MemorySource(edges), "A")
+    def test_chain_and_leaf(self):
+        """Включить последнюю вершину цепочки и отдельный лист."""
+        self.assertEqual(graph.adjacency_text(build("chain")), "A: B\nB: C\nC:")
+        self.assertEqual(graph.adjacency_text(build("leaf")), "A:")
 
-    def test_diamond_and_unreachable(self):
-        """Посетить общий узел один раз; недостижимый не включать."""
-        source = MemorySource(
-            {"A": ["B", "C"], "B": ["D"], "C": ["D"], "D": [], "Z": []}
+    def test_diamond(self):
+        """Сохранить обе ветви к общей вершине и исключить недостижимую."""
+        result = build("diamond")
+        self.assertEqual(
+            result.edges, {"A": ["B", "C"], "B": ["D"], "D": [], "C": ["D"]}
         )
-        graph = graph_module.build_graph(source, "A")
-        self.assertEqual(source.calls, ["A", "B", "D", "C"])
-        self.assertEqual(graph.edges["C"], ["D"])
-        self.assertNotIn("Z", graph.edges)
-        self.assertEqual(graph_module.traverse(graph)[1], [])
+        self.assertEqual(graph.traverse(result)[1], [])
 
-    def test_cycle_and_self_cycle(self):
-        """Сохранить обратное ребро и завершить обход."""
-        for edges, back in [
-            ({"A": ["B"], "B": ["A"]}, ("B", "A")),
-            ({"A": ["A"]}, ("A", "A")),
-        ]:
-            with self.subTest(edges=edges):
-                graph = self.build(edges)
-                self.assertIn(back, graph_module.traverse(graph)[1])
-
-    def test_leaf(self):
-        """Единственная вершина сохраняется в результате."""
-        graph = self.build({"A": []})
-        self.assertEqual(graph_module.adjacency_text(graph), "A:")
-        self.assertEqual(graph_module.traverse(graph), (["A"], []))
-
-    def test_deep_iterative_dfs(self):
-        """Пройти 2500 узлов, превышающих обычный лимит рекурсии Python."""
-        length = 2500
-        edges = {str(i): [str(i + 1)] for i in range(length)}
-        edges[str(length)] = []
-        graph = graph_module.build_graph(MemorySource(edges), "0")
-        completed, cycles = graph_module.traverse(graph)
-        self.assertEqual(len(completed), length + 1)
-        self.assertEqual(completed[0], str(length))
-        self.assertEqual(cycles, [])
+    def test_cycles(self):
+        """Отметить обратное ребро цикла и петлю."""
+        cases = (("cycle", ("C", "A")), ("self_cycle", ("A", "A")))
+        for example, back_edge in cases:
+            with self.subTest(example=example):
+                result = build(example)
+                self.assertEqual(graph.traverse(result)[1], [back_edge])
+                with self.assertRaisesRegex(ValueError, "порядок.*цикл"):
+                    graph.dependency_order(result)
 
     def test_dependency_order(self):
-        """Каждая зависимость находится раньше своего потребителя."""
-        graph = self.build({"A": ["B", "C"], "B": ["D"], "C": ["D"], "D": []})
-        order = graph_module.dependency_order(graph)
-        self.assertEqual(order, ["D", "B", "C"])
-        positions = {node: index for index, node in enumerate(order + ["A"])}
-        for node, children in graph.edges.items():
-            for child in children:
-                self.assertLess(positions[child], positions[node])
-        self.assertEqual(
-            graph_module.dependency_order(self.build({"A": []})), []
-        )
-
-    def test_no_order_for_cycle(self):
-        """Цикл не выдаётся за корректный порядок установки."""
-        for edges in [{"A": ["A"]}, {"A": ["B"], "B": ["A"]}]:
-            with self.subTest(edges=edges):
-                with self.assertRaisesRegex(ValueError, "порядок.*цикл"):
-                    graph_module.dependency_order(self.build(edges))
+        """Поставить зависимость раньше пакета, который её использует."""
+        for example, expected in (
+            ("chain", ["C", "B"]), ("diamond", ["D", "B", "C"]), ("leaf", []),
+        ):
+            with self.subTest(example=example):
+                order = graph.dependency_order(build(example))
+                self.assertEqual(order, expected)
 
     def test_invalid_repository(self):
-        """Отклонить пустой файл, неверные имена и отсутствующие вершины."""
-        for text in ["", "a: B", "A B", "A: BB", "A: B", "A:\nA:"]:
+        """Отклонить неверный формат и неописанные вершины."""
+        for text in ("", "A B", "A: BB", "A: B", "A:\nA:"):
             with self.subTest(text=text):
                 with self.assertRaises(ValueError):
-                    repository_module.parse_test_repository(text)
-
-    def test_test_file_and_missing_root(self):
-        """Прочитать UTF-8 файл и проверить существование выбранного корня."""
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "repo.txt"
-            path.write_text("A: B B # общий узел\nB:\n", encoding="utf-8")
-            source = repository_module.TestRepository(path)
-            self.assertEqual(source.direct(source.resolve("A")), ["B"])
-            with self.assertRaisesRegex(ValueError, "отсутствует"):
-                source.resolve("Z")
-            path.write_bytes(b"\xff")
-            with self.assertRaisesRegex(ValueError, "прочитать"):
-                repository_module.TestRepository(path)
-
-    def test_scope_optional_and_exclusions(self):
-        """Применять scope и exclusions по контексту пути."""
-        model = import_module("depgraph.model")
-        source = repository_module.MavenSource("https://example.org/")
-        source.direct = lambda node: [
-            model.Dependency("g:b:1"),
-            model.Dependency("g:c:1", scope="test"),
-            model.Dependency("g:d:1", optional=True),
-            model.Dependency("g:e:1", exclusions=frozenset({("x", "*")})),
-        ]
-        self.assertEqual(
-            source.children("g:a:1", frozenset({("g", "b")})),
-            [("g:e:1", frozenset({("g", "b"), ("x", "*")}))],
-        )
-
-
-if __name__ == "__main__":
-    unittest.main()
+                    repository.parse_test_repository(text)

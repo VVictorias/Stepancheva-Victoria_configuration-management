@@ -5,9 +5,13 @@ import re
 import xml.etree.ElementTree as ET
 
 
+GROUP = r"[A-Za-z0-9_][A-Za-z0-9_-]*"
+PART = r"[A-Za-z0-9_][A-Za-z0-9_.-]*"
+COORDINATES = re.compile(rf"{GROUP}(?:\.{GROUP})*:{PART}(?::{PART})?")
+COORDINATE_KEYS = ("groupId", "artifactId", "version")
 PROPERTY = re.compile(r"\$\{([^}]+)\}")
 MAX_PROPERTY_PASSES = 64
-COORDINATE_PARTS = 3
+COORDINATE_PARTS = len(COORDINATE_KEYS)
 
 
 @dataclass
@@ -92,11 +96,14 @@ def resolved_fields(values, properties):
 def coordinates(value):
     """Разобрать точные координаты; диапазоны не подменять версиями."""
     parts = value.split(":")
-    if len(parts) != COORDINATE_PARTS or not all(parts):
-        raise ValueError("нужны точные координаты groupId:artifactId:version")
-    if any(not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]*", p) for p in parts):
-        raise ValueError(f"неподдерживаемые координаты или версия: {value}")
+    if len(parts) != COORDINATE_PARTS or not COORDINATES.fullmatch(value):
+        raise ValueError(f"нужны точные координаты Maven: {value}")
     return parts
+
+
+def package_name(fields):
+    """Собрать координаты из полей POM."""
+    return ":".join(fields.get(key, "") for key in COORDINATE_KEYS)
 
 
 def to_dependency(values, model):
@@ -104,9 +111,7 @@ def to_dependency(values, model):
     resolved = resolved_fields(values, model.properties)
     defaults = model.managed.get(dependency_key(resolved), {})
     merged = {**resolved_fields(defaults, model.properties), **resolved}
-    package = ":".join(
-        merged.get(key, "") for key in ("groupId", "artifactId", "version")
-    )
+    package = package_name(merged)
     coordinates(package)
     return Dependency(
         package,

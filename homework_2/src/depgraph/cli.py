@@ -4,7 +4,8 @@ import sys
 
 from .config import parse_args
 from .graph import adjacency_text, build_graph, dependency_order, traverse
-from .repository import MavenSource, TestRepository
+from .maven import MavenRepository
+from .repository import TestRepository
 from .visualize import ascii_tree, mermaid_text, write_visualization
 
 
@@ -31,22 +32,27 @@ def execute(config):
     source = (
         TestRepository(config.repository)
         if config.test_repository
-        else MavenSource(config.repository)
+        else MavenRepository(config.repository)
     )
     root = source.resolve(config.package)
     if config.mode == "direct":
-        for item in source.direct(root):
-            print(item if isinstance(item, str) else item.package)
+        dependencies = source.direct(root)
+        for item in dependencies:
+            print(item if config.test_repository else item.package)
         return
-    graph = build_graph(source, root)
+    show_graph(build_graph(source, root), config)
+
+
+def show_graph(graph, config):
+    """Вывести граф, порядок зависимостей или визуализацию."""
     if config.mode == "order":
         order = dependency_order(graph)
         print("\n".join(order) if order else "Зависимостей нет.")
         return
-    if config.mode == "visualize":
-        show_visualization(graph, config)
-    else:
+    if config.mode == "graph":
         print(adjacency_text(graph))
+    else:
+        show_visualization(graph, config)
     _, cycles = traverse(graph)
     for left, right in cycles:
         print(f"Цикл: {left} -> {right}", file=sys.stderr)

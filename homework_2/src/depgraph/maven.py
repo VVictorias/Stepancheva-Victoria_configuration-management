@@ -2,21 +2,24 @@
 
 from pathlib import Path
 import ssl
-from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 from .model import (
+    COORDINATE_KEYS,
     Model,
     coordinates,
     declaration,
     dependency_key,
     expand,
+    package_name,
     resolved_fields,
     to_dependency,
     xml_document,
 )
 
 
+RUNTIME_SCOPES = {"compile", "runtime"}
+VERSIONLESS_PARTS = 2
 TIMEOUT_SECONDS = 20
 MAX_DOCUMENT_BYTES = 4 * 1024 * 1024
 MAX_MODEL_DEPTH = 64
@@ -44,7 +47,7 @@ class MavenRepository:
                 request, timeout=TIMEOUT_SECONDS, context=self.context
             ) as response:
                 data = response.read(MAX_DOCUMENT_BYTES + 1)
-        except (OSError, URLError) as error:
+        except OSError as error:
             raise ValueError(f"не удалось загрузить {url}: {error}") from error
         if len(data) > MAX_DOCUMENT_BYTES:
             raise ValueError(f"документ слишком большой: {url}")
@@ -52,8 +55,9 @@ class MavenRepository:
 
     def resolve(self, package):
         """При пропуске версии выбрать release из maven-metadata.xml."""
-        if package.count(":") == 1:
-            group, artifact = package.split(":")
+        parts = package.split(":")
+        if len(parts) == VERSIONLESS_PARTS:
+            group, artifact = parts
             path = f"{group.replace('.', '/')}/{artifact}/maven-metadata.xml"
             root = self.document(path)
             version = root.findtext("versioning/release")
@@ -87,8 +91,9 @@ class MavenRepository:
         if root.tag != "project":
             raise ValueError(f"ожидался корневой элемент project: {package}")
         parent = self.parent_model(root)
-        properties = dict(parent.properties)
-        properties.update(self.project_properties(root, package))
+        properties = {
+            **parent.properties, **project_properties(root, package)
+        }
         model = Model(
             properties, dict(parent.managed), dict(parent.dependencies)
         )
@@ -104,61 +109,27 @@ class MavenRepository:
         parent = root.find("parent")
         if parent is None:
             return Model()
-        fields = (
-            parent.findtext(key, "").strip()
-            for key in ("groupId", "artifactId", "version")
-        )
-        properties = self.raw_properties(root)
-        package = expand(":".join(fields), properties)
-        return self.model(package)
-
-    def raw_properties(self, root):
-        """Извлечь пользовательские свойства текущего POM."""
-        element = root.find("properties")
-        if element is None:
-            return {}
-        return {item.tag: (item.text or "").strip() for item in element}
-
-    def project_properties(self, root, package):
-        """Добавить стандартные project/pom и parent-псевдонимы."""
-        group, artifact, version = coordinates(package)
-        result = self.raw_properties(root)
-        for prefix in ("project", "pom"):
-            for key, value in zip(
-                ("groupId", "artifactId", "version"),
-                (group, artifact, version),
-            ):
-                result[f"{prefix}.{key}"] = value
-        parent = root.find("parent")
-        if parent is not None:
-            for key in ("groupId", "artifactId", "version"):
-                result[f"project.parent.{key}"] = parent.findtext(key, "")
-        return result
+        fields = {
+            key: parent.findtext(key, "").strip() for key in COORDINATE_KEYS
+        }
+        return self.model(expand(package_name(fields), raw_properties(root)))
 
     def read_management(self, root, model):
         """Импортировать BOM, затем применить локальное управление."""
-        items = [
-            declaration(item)
-            for item in root.findall(
-                "dependencyManagement/dependencies/dependency"
-            )
-        ]
-        local = []
+        path = "dependencyManagement/dependencies/dependency"
+        local = {}
         imported = {}
-        for raw in items:
+        for item in root.findall(path):
+            raw = declaration(item)
             values = resolved_fields(raw, model.properties)
             if values.get("scope") == "import":
-                package = ":".join(
-                    values.get(key, "")
-                    for key in ("groupId", "artifactId", "version")
-                )
-                bom = self.model(package)
+                bom = self.model(package_name(values))
                 for key, value in bom.managed.items():
                     imported.setdefault(
                         key, resolved_fields(value, bom.properties)
                     )
             else:
-                local.append((dependency_key(values), raw))
+                local[dependency_key(values)] = raw
         model.managed.update(imported)
         model.managed.update(local)
 
@@ -168,3 +139,42 @@ class MavenRepository:
         return [
             to_dependency(item, model) for item in model.dependencies.values()
         ]
+
+    def children(self, package, exclusions):
+        """Вернуть runtime-соседей с исключениями для следующего шага."""
+        return [
+            (item.package, exclusions | item.exclusions)
+            for item in self.direct(package)
+            if item.scope in RUNTIME_SCOPES
+            and not item.optional
+            and not excluded(item.package, exclusions)
+        ]
+
+
+def excluded(package, exclusions):
+    """Проверить groupId и artifactId по списку исключений."""
+    group, name, _ = package.split(":")
+    return any(
+        left in (group, "*") and right in (name, "*")
+        for left, right in exclusions
+    )
+
+
+def raw_properties(root):
+    """Прочитать свойства, заданные в POM."""
+    return {
+        item.tag: (item.text or "").strip()
+        for item in root.findall("properties/*")
+    }
+
+
+def project_properties(root, package):
+    """Добавить свойства project, pom и project.parent."""
+    result = raw_properties(root)
+    for key, value in zip(COORDINATE_KEYS, package.split(":")):
+        result[f"project.{key}"] = result[f"pom.{key}"] = value
+    for key in COORDINATE_KEYS:
+        value = root.findtext(f"parent/{key}")
+        if value is not None:
+            result[f"project.parent.{key}"] = value.strip()
+    return result

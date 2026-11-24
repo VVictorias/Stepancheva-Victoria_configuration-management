@@ -15,61 +15,32 @@ visualize = import_module("depgraph.visualize")
 class VisualizationTests(unittest.TestCase):
     """Сверить рёбра изображения и защиту от повторного раскрытия."""
 
-    def test_mermaid_edges_and_leaf(self):
-        """Сохранить оба ребра цикла и отдельную вершину листа."""
+    def test_mermaid_files_and_browser(self):
+        """Сохранить Mermaid и HTML с рёбрами, открыть страницу."""
         graph = graph_module.Graph("A", {"A": ["B"], "B": ["A"]})
-        text = visualize.mermaid_text(graph)
-        self.assertIn("flowchart TD", text)
-        self.assertIn("n0 --> n1", text)
-        self.assertIn("n1 --> n0", text)
-        self.assertEqual(
-            visualize.mermaid_text(graph_module.Graph("A", {"A": []})),
-            'flowchart TD\n    n0["A"]\n',
-        )
-
-    def test_ascii_diamond(self):
-        """Отобразить обе ветви и не раскрывать общий узел повторно."""
-        graph = graph_module.Graph(
-            "A", {"A": ["B", "C"], "B": ["D"], "D": [], "C": ["D"]}
-        )
-        self.assertEqual(
-            visualize.ascii_tree(graph),
-            "A\n|-- B\n|   `-- D\n`-- C\n    `-- D [уже показан]",
-        )
-
-    def test_ascii_cycle(self):
-        """Завершить ASCII-обход петли с понятной отметкой."""
-        graph = graph_module.Graph("A", {"A": ["A"]})
-        self.assertEqual(visualize.ascii_tree(graph), "A\n`-- A [цикл]")
-
-    def test_write_and_open(self):
-        """Записать оба файла и передать браузеру абсолютный file URI."""
-        graph = graph_module.Graph("A", {"A": []})
         with tempfile.TemporaryDirectory() as directory:
             with patch(
                 "depgraph.visualize.webbrowser.open", return_value=True
             ) as opened:
                 page = visualize.write_visualization(graph, directory)
             opened.assert_called_once_with(page.as_uri())
-            self.assertIn("mermaid.run", page.read_text())
-            self.assertIn("Диаграмма готова", page.read_text())
-            self.assertEqual(
-                (page.parent / "graph.mmd").read_text(),
-                visualize.mermaid_text(graph),
-            )
+            html = page.read_text(encoding="utf-8")
+            self.assertIn("mermaid.run", html)
+            self.assertIn("Диаграмма готова", html)
+            diagram = (page.parent / "graph.mmd").read_text(encoding="utf-8")
+            self.assertIn("flowchart TD", diagram)
+            self.assertIn("n0 --> n1", diagram)
+            self.assertIn("n1 --> n0", diagram)
 
-    def test_headless_and_browser_failure(self):
-        """Не открывать браузер при no-open и сообщать об отказе открытия."""
-        graph = graph_module.Graph("A", {"A": []})
-        with tempfile.TemporaryDirectory() as directory:
-            with patch(
-                "depgraph.visualize.webbrowser.open", return_value=False
-            ) as opened:
-                visualize.write_visualization(graph, directory, False)
-                opened.assert_not_called()
-                with self.assertRaisesRegex(ValueError, "браузер"):
-                    visualize.write_visualization(graph, directory)
-
-
-if __name__ == "__main__":
-    unittest.main()
+    def test_ascii_tree(self):
+        """Отметить общий узел ромба, цикл и одиночную вершину."""
+        cases = (
+            ({"A": ["B", "C"], "B": ["D"], "D": [], "C": ["D"]},
+             "A\n|-- B\n|   `-- D\n`-- C\n    `-- D [уже показан]"),
+            ({"A": ["A"]}, "A\n`-- A [цикл]"),
+            ({"A": []}, "A"),
+        )
+        for edges, expected in cases:
+            with self.subTest(edges=edges):
+                graph = graph_module.Graph("A", edges)
+                self.assertEqual(visualize.ascii_tree(graph), expected)

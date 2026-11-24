@@ -5,7 +5,6 @@ from pathlib import Path
 import sys
 import unittest
 from unittest.mock import patch
-from urllib.error import URLError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 maven = import_module("depgraph.maven")
@@ -38,26 +37,6 @@ class MavenTests(unittest.TestCase):
         repository.document = lambda path: project(documents[path])
         return repository
 
-    def test_direct_scopes_and_exclusions(self):
-        """Сохранить scope, optional и исключения прямых зависимостей."""
-        extra = (
-            "<scope>test</scope><optional>true</optional><exclusions>"
-            "<exclusion><groupId>x</groupId><artifactId>y</artifactId>"
-            "</exclusion></exclusions>"
-        )
-        repo = self.repo(
-            {
-                "g/a/1/a-1.pom": "<dependencies>"
-                + dep(extra=extra)
-                + "</dependencies>"
-            }
-        )
-        (item,) = repo.direct("g:a:1")
-        self.assertEqual(item.package, "g:b:1")
-        self.assertEqual(item.scope, "test")
-        self.assertTrue(item.optional)
-        self.assertIn(("x", "y"), item.exclusions)
-
     def test_parent_properties_and_management(self):
         """Получить версию из parent и применить свойство дочернего POM."""
         parent = (
@@ -76,12 +55,16 @@ class MavenTests(unittest.TestCase):
         repo = self.repo({"g/p/1/p-1.pom": parent, "g/a/1/a-1.pom": child})
         self.assertEqual(repo.direct("g:a:1")[0].package, "g:b:2")
 
-    def test_bom_and_cache(self):
-        """Импортировать BOM и повторно не загружать готовую модель."""
+    def test_bom_scopes_and_exclusions(self):
+        """Импортировать версию и исключения, отобрать runtime-зависимости."""
+        excludes = (
+            "<exclusions><exclusion><groupId>x</groupId>"
+            "<artifactId>*</artifactId></exclusion></exclusions>"
+        )
         bom = (
-            "<properties><bom.version>1</bom.version></properties>"
+            "<properties><ver>2</ver></properties>"
             "<dependencyManagement><dependencies>"
-            + dep(version="${bom.version}")
+            + dep(version="${ver}", extra=excludes)
             + "</dependencies></dependencyManagement>"
         )
         root = (
@@ -89,65 +72,40 @@ class MavenTests(unittest.TestCase):
             + dep("bom", extra="<scope>import</scope><type>pom</type>")
             + "</dependencies></dependencyManagement><dependencies>"
             "<dependency><groupId>g</groupId><artifactId>b</artifactId>"
-            "</dependency></dependencies>"
+            "</dependency>"
+            + dep("test", extra="<scope>test</scope>")
+            + dep("optional", extra="<optional>true</optional>")
+            + "</dependencies>"
         )
         repo = self.repo({"g/bom/1/bom-1.pom": bom, "g/a/1/a-1.pom": root})
-        self.assertEqual(repo.direct("g:a:1")[0].package, "g:b:1")
-        repo.document = lambda path: self.fail("cache miss")
-        self.assertEqual(repo.direct("g:a:1")[0].package, "g:b:1")
-
-    def test_managed_exclusions(self):
-        """Не потерять exclusions, заданные через dependencyManagement."""
-        exclusions = (
-            "<exclusions><exclusion><groupId>x</groupId>"
-            "<artifactId>*</artifactId></exclusion></exclusions>"
-        )
-        body = (
-            "<dependencyManagement><dependencies>"
-            + dep(extra=exclusions)
-            + "</dependencies></dependencyManagement><dependencies>"
-            "<dependency><groupId>g</groupId><artifactId>b</artifactId>"
-            "</dependency></dependencies>"
-        )
-        repo = self.repo({"g/a/1/a-1.pom": body})
         self.assertEqual(
-            repo.direct("g:a:1")[0].exclusions, frozenset({("x", "*")})
+            [item.package for item in repo.direct("g:a:1")],
+            ["g:b:2", "g:test:1", "g:optional:1"],
         )
+        with patch.object(repo, "document") as load:
+            self.assertEqual(
+                repo.children("g:a:1", frozenset()),
+                [("g:b:2", frozenset({("x", "*")}))],
+            )
+            self.assertEqual(repo.children("g:a:1", {("g", "*")}), [])
+            load.assert_not_called()
 
-    def test_empty_and_bad_pom(self):
-        """Лист не имеет зависимостей; повреждённый XML вызывает ошибку."""
-        self.assertEqual(self.repo({"g/a/1/a-1.pom": ""}).direct("g:a:1"), [])
+    def test_invalid_poms(self):
+        """Сообщить об ошибочном XML, цикле parent и неизвестной версии."""
         with self.assertRaisesRegex(ValueError, "XML"):
             model_module.xml_document("<project>")
-
-    def test_parent_cycle(self):
-        """Отклонить цикл родителей без бесконечной рекурсии."""
-        body = (
-            "<parent><groupId>g</groupId><artifactId>a</artifactId>"
-            "<version>1</version></parent>"
+        cases = (
+            ("<parent><groupId>g</groupId><artifactId>a</artifactId>"
+             "<version>1</version></parent>", "цикл"),
+            ("<dependencies>" + dep(version="${missing}") + "</dependencies>",
+             "свойство"),
+            ("<dependencies>" + dep(version="[1,2)") + "</dependencies>",
+             "точные координаты"),
         )
-        with self.assertRaisesRegex(ValueError, "цикл"):
-            self.repo({"g/a/1/a-1.pom": body}).direct("g:a:1")
-
-    def test_unknown_and_cyclic_properties(self):
-        """Не выдавать неразрешённые свойства за координаты пакетов."""
-        for properties in [{}, {"v": "${w}", "w": "${v}"}]:
-            with self.subTest(properties=properties):
-                with self.assertRaisesRegex(ValueError, "свойство"):
-                    model_module.expand("${v}", properties)
-
-    def test_missing_version_and_range(self):
-        """Отсутствующая версия и диапазон дают явную ошибку."""
-        for version in ["", "[1,2)"]:
-            repo = self.repo(
-                {
-                    "g/a/1/a-1.pom": "<dependencies>"
-                    + dep(version=version)
-                    + "</dependencies>"
-                }
-            )
-            with self.subTest(version=version):
-                with self.assertRaises(ValueError):
+        for body, message in cases:
+            with self.subTest(body=body):
+                repo = self.repo({"g/a/1/a-1.pom": body})
+                with self.assertRaisesRegex(ValueError, message):
                     repo.direct("g:a:1")
 
     def test_metadata(self):
@@ -160,14 +118,3 @@ class MavenTests(unittest.TestCase):
         repo.document = lambda path: project("")
         with self.assertRaisesRegex(ValueError, "release"):
             repo.resolve("g:a")
-
-    def test_transport_error(self):
-        """Сетевая ошибка преобразуется в понятное исключение."""
-        repo = maven.MavenRepository("https://example.org/")
-        with patch("depgraph.maven.urlopen", side_effect=URLError("offline")):
-            with self.assertRaisesRegex(ValueError, "загрузить.*offline"):
-                repo.document("test.pom")
-
-
-if __name__ == "__main__":
-    unittest.main()

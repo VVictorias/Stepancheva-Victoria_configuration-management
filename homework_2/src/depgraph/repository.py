@@ -1,13 +1,10 @@
-"""Источники рёбер графа: локальный текстовый файл и Maven POM."""
+"""Чтение графа из локального тестового файла."""
 
 from pathlib import Path
 import re
 
-from .maven import MavenRepository
-
 
 NODE = re.compile(r"[A-Z]")
-RUNTIME_SCOPES = frozenset(("compile", "runtime"))
 
 
 def parse_test_line(line, number):
@@ -70,27 +67,3 @@ class TestRepository:
     def direct(self, package):
         """Вернуть прямые зависимости тестового пакета."""
         return self.graph[package]
-
-
-def excluded(package, exclusions):
-    """Проверить точные и wildcard-исключения groupId/artifactId."""
-    group, name, _ = package.split(":")
-    return any(
-        (left in (group, "*")) and (right in (name, "*"))
-        for left, right in exclusions
-    )
-
-
-class MavenSource(MavenRepository):
-    """Строить граф runtime-зависимостей потребителя выбранной библиотеки."""
-
-    def children(self, package, exclusions):
-        """Исключить test/provided/system и optional, сохранив контекст пути."""
-        result = []
-        for item in self.direct(package):
-            if item.scope not in RUNTIME_SCOPES or item.optional:
-                continue
-            if excluded(item.package, exclusions):
-                continue
-            result.append((item.package, exclusions | item.exclusions))
-        return result
