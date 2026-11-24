@@ -16,25 +16,6 @@ TOML_INT_MIN = -(2**63)
 TOML_INT_MAX = 2**63 - 1
 
 
-def parse(text):
-    """Построить дерево разбора или сообщить место ошибки."""
-    try:
-        return PARSER.parse(text)
-    except UnexpectedInput as error:
-        if isinstance(error, UnexpectedToken) and error.token.type == "$END":
-            line = text.count("\n") + 1
-            column = len(text) - text.rfind("\n")
-            detail = "неожиданный конец файла"
-        else:
-            line, column = error.line, error.column
-            char = text[error.pos_in_stream]
-            detail = f"неожиданный символ {char!r}"
-        raise ValueError(
-            f"строка {line}, столбец {column}: "
-            f"синтаксическая ошибка ({detail})"
-        ) from None
-
-
 def integer_operands(left, right):
     """Проверить аргументы сложения и вычитания."""
     if not isinstance(left, int) or not isinstance(right, int):
@@ -94,9 +75,12 @@ class Calculate(Transformer_NonRecursive):
 
     def char_code(self, value):
         """Получить код Unicode одного символа."""
-        if not isinstance(value, str) or len(value) != 1:
-            raise ValueError("для ord нужна строка из одного символа")
-        return ord(value)
+        try:
+            return ord(value)
+        except TypeError:
+            raise ValueError(
+                "для ord нужна строка из одного символа"
+            ) from None
 
     def declaration(self, value, name):
         """Сохранить значение под уникальным именем."""
@@ -106,11 +90,25 @@ class Calculate(Transformer_NonRecursive):
         self.values[str(name)] = value
 
 
+def syntax_error(text, error):
+    """Описать место синтаксической ошибки."""
+    if isinstance(error, UnexpectedToken) and error.token.type == "$END":
+        line = text.count("\n") + 1
+        column = len(text) - text.rfind("\n")
+        detail = "неожиданный конец файла"
+    else:
+        line, column = error.line, error.column
+        detail = f"неожиданный символ {text[error.pos_in_stream]!r}"
+    return f"строка {line}, столбец {column}: синтаксическая ошибка ({detail})"
+
+
 def convert(text):
-    """Разобрать исходный текст и получить словарь для TOML."""
+    """Разобрать текст и получить словарь для TOML."""
     calculation = Calculate()
     try:
-        calculation.transform(parse(text))
+        calculation.transform(PARSER.parse(text))
+    except UnexpectedInput as error:
+        raise ValueError(syntax_error(text, error)) from None
     except VisitError as error:
         if not isinstance(error.orig_exc, ValueError):
             raise

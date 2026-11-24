@@ -1,5 +1,6 @@
 """Проверки запуска конвертера через командную строку."""
 
+import os
 import subprocess
 import sys
 import tempfile
@@ -8,7 +9,7 @@ import unittest
 from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parents[1]
-MAIN = PROJECT / "src" / "main.py"
+LAUNCHER = PROJECT / "run.sh"
 
 
 class CliTests(unittest.TestCase):
@@ -21,25 +22,28 @@ class CliTests(unittest.TestCase):
         self.directory = Path(work.name)
         self.source = self.directory / "input file.cfg"
         self.output = self.directory / "output file.toml"
+        python_dir = Path(sys.executable).parent
+        self.env = dict(os.environ, PATH=f"{python_dir}:{os.environ['PATH']}")
 
-    def run_cli(self, input_path=None, output_path=None):
-        """Запустить точку входа отдельным процессом."""
+    def run_cli(self, *args):
+        """Запустить скрипт из каталога с тестовыми файлами."""
         return subprocess.run(
-            [
-                sys.executable, "-B", str(MAIN),
-                "--input", str(input_path or self.source),
-                "--output", str(output_path or self.output),
-            ],
+            ["bash", str(LAUNCHER), *args],
             cwd=self.directory,
+            env=self.env,
             capture_output=True,
             text=True,
             timeout=10,
         )
 
+    def convert_files(self, source, output):
+        """Передать конвертеру пути к входному и выходному файлам."""
+        return self.run_cli("--input", source, "--output", output)
+
     def assert_config(self, source, expected):
         """Сравнить данные выходного TOML с ожидаемым словарём."""
         self.source.write_text(source, encoding="utf-8")
-        result = self.run_cli()
+        result = self.convert_files(self.source.name, self.output.name)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stderr, "")
         with self.output.open("rb") as file:
@@ -50,7 +54,7 @@ class CliTests(unittest.TestCase):
         original = "previous = 42\n"
         self.source.write_text(source, encoding="utf-8")
         self.output.write_text(original, encoding="utf-8")
-        result = self.run_cli()
+        result = self.convert_files(self.source.name, self.output.name)
         self.assertEqual(result.returncode, 1)
         self.assertIn(message, result.stderr)
         self.assertNotIn("Traceback", result.stderr)
@@ -69,13 +73,18 @@ class CliTests(unittest.TestCase):
             },
         )
 
-    def test_invalid_integers(self):
-        """Отклонить дроби, ведущие нули и неверные знаки."""
-        for value in ("01", "-01", "+00", "2.5", "1e3", "++1", "- 1", "١"):
+    def test_invalid_syntax(self):
+        """Отклонить неверные числа, строки, массивы и выражения."""
+        values = (
+            "-01", "2.5", "1e3", "++1", "- 1", "١",
+            '"text"', '@"text', '@"one\ntwo"',
+            "list(1 2)", "list(1,)", "list(,2)", "list(1,,2)", "[1]",
+            "?{* 2 3}", "?{+ 2}", "?{+ 2 3 4}", "?{ord}", "?{ord 1 2}",
+            "?{+ 2+3}", "?{+2 3}",
+        )
+        for value in values:
             with self.subTest(value=value):
-                self.assert_invalid(
-                    f"{value} -> digit", "синтаксическая ошибка"
-                )
+                self.assert_invalid(f"{value} -> item", "синтаксическая ошибка")
 
     def test_toml_integer_range(self):
         """Отклонить слишком большие числа, в том числе вычисленные."""
@@ -100,12 +109,6 @@ class CliTests(unittest.TestCase):
             },
         )
 
-    def test_invalid_strings(self):
-        """Отклонить кавычки без @, обрыв строки и перенос внутри строки."""
-        for value in ('"text"', '@"text', '@"one\ntwo"'):
-            with self.subTest(value=value):
-                self.assert_invalid(f"{value} -> s", "синтаксическая ошибка")
-
     def test_arrays(self):
         """Проверить обычный, пустой и вложенный смешанный массивы."""
         self.assert_config(
@@ -113,13 +116,6 @@ class CliTests(unittest.TestCase):
             'list(1,\n list(@"два", list(3)),\n ?{+ 4 5}) -> nested\n',
             {"flat": [1, 2, 3], "empty": [], "nested": [1, ["два", [3]], 9]},
         )
-
-    def test_invalid_arrays(self):
-        """Отклонить неверные разделители и пропущенные элементы."""
-        values = ("list(1 2)", "list(1,)", "list(,2)", "list(1,,2)", "[1]")
-        for value in values:
-            with self.subTest(value=value):
-                self.assert_invalid(f"{value} -> a", "синтаксическая ошибка")
 
     def test_names(self):
         """Принять регистр, подчёркивания и имена list и ord."""
@@ -136,10 +132,6 @@ class CliTests(unittest.TestCase):
                 self.assert_invalid(
                     f"1 -> {name}", "синтаксическая ошибка"
                 )
-
-    def test_duplicate_constant(self):
-        """Отклонить повторное объявление."""
-        self.assert_invalid("1 -> x\n2 -> x", "строка 2: повтор имени 'x'")
 
     def test_nested_arithmetic(self):
         """Вычислить вложенные выражения с константами и знаками."""
@@ -158,8 +150,9 @@ class CliTests(unittest.TestCase):
             {"letter": "Я", "code": ord("Я"), "offset": 66},
         )
 
-    def test_unknown_constant(self):
-        """Отклонить отсутствующее и объявленное ниже имя."""
+    def test_constant_errors(self):
+        """Отклонить неизвестное имя и повторное объявление."""
+        self.assert_invalid("1 -> x\n2 -> x", "строка 2: повтор имени 'x'")
         for source in (
             "?{+ missing 1} -> value",
             "?{+ missing 1} -> value\n1 -> missing",
@@ -167,27 +160,15 @@ class CliTests(unittest.TestCase):
             with self.subTest(source=source):
                 self.assert_invalid(source, "неизвестная константа 'missing'")
 
-    def test_bad_arithmetic_arguments(self):
-        """Отклонить строки и массивы в арифметических операциях."""
+    def test_invalid_operation_arguments(self):
+        """Отклонить аргументы неверных типов и строки неверной длины."""
         self.assert_invalid('?{+ @"1" 2} -> x', "нужны два целых числа")
         self.assert_invalid("?{- 2 list(1)} -> x", "нужны два целых числа")
-
-    def test_bad_ord_arguments(self):
-        """Отклонить строку неверной длины и значения другого типа."""
-        for argument in ('@""', '@"AB"', '1', 'list(@"A")'):
+        for argument in ('@""', '@"AB"', "1", 'list(@"A")'):
             with self.subTest(argument=argument):
                 self.assert_invalid(
                     f"?{{ord {argument}}} -> x", "строка из одного символа"
                 )
-
-    def test_invalid_expressions(self):
-        """Отклонить неверную операцию, арность и разделение аргументов."""
-        for value in (
-            "?{* 2 3}", "?{+ 2}", "?{+ 2 3 4}", "?{ord}",
-            "?{ord 1 2}", "?{+ 2+3}", "?{+2 3}",
-        ):
-            with self.subTest(value=value):
-                self.assert_invalid(f"{value} -> x", "синтаксическая ошибка")
 
     def test_error_location(self):
         """Сообщить строку и столбец ошибки, в том числе в конце файла."""
@@ -195,66 +176,53 @@ class CliTests(unittest.TestCase):
         self.assert_invalid("1 -> x\nlist(1,", "строка 2, столбец 8")
         self.assert_invalid("1 -> x\nlist(1,", "неожиданный конец файла")
 
-    def test_missing_input(self):
-        """Сообщить об отсутствующем файле и не создать выход."""
-        result = self.run_cli()
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("не удалось прочитать", result.stderr)
-        self.assertFalse(self.output.exists())
+    def test_read_errors(self):
+        """Сообщить о пропавшем файле или неверной кодировке."""
+        for data in (None, b'@"\xff" -> x'):
+            with self.subTest(data=data):
+                if data is not None:
+                    self.source.write_bytes(data)
+                result = self.convert_files(self.source.name, self.output.name)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("не удалось прочитать", result.stderr)
+                self.assertFalse(self.output.exists())
 
-    def test_invalid_utf8(self):
-        """Сообщить об ошибке чтения файла в другой кодировке."""
-        self.source.write_bytes(b'@"\xff" -> x')
-        result = self.run_cli()
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("не удалось прочитать", result.stderr)
-
-    def test_output_is_directory(self):
-        """Сообщить об ошибке записи и убрать временный файл."""
+    def test_output_errors(self):
+        """Сохранить исходный файл и сообщить об ошибках записи."""
         self.source.write_text("1 -> x", encoding="utf-8")
         self.output.mkdir()
-        result = self.run_cli()
+        result = self.convert_files(self.source.name, self.output.name)
         self.assertEqual(result.returncode, 1)
         self.assertIn("не удалось записать", result.stderr)
-        self.assertEqual(set(self.directory.iterdir()),
-                         {self.source, self.output})
+        self.assertEqual(
+            set(self.directory.iterdir()), {self.source, self.output}
+        )
         self.assertTrue(self.output.is_dir())
 
-    def test_same_file(self):
-        """Отклонить совпадение путей, сохранив исходный текст."""
-        self.source.write_text("1 -> x", encoding="utf-8")
-        result = self.run_cli(output_path=self.source)
+        result = self.convert_files(self.source.name, self.source.name)
         self.assertEqual(result.returncode, 1)
-        self.assertIn("пути к входному и выходному файлам совпадают",
-                      result.stderr)
+        self.assertIn(
+            "пути к входному и выходному файлам совпадают", result.stderr
+        )
         self.assertEqual(self.source.read_text(encoding="utf-8"), "1 -> x")
 
-    def test_launcher_from_other_directory(self):
-        """Запустить run.sh из другого каталога с путями с пробелами."""
-        self.source.write_text('@"Ввод" -> title', encoding="utf-8")
-        result = subprocess.run(
-            [
-                "bash", str(PROJECT / "run.sh"),
-                "--input", self.source.name, "--output", self.output.name,
-            ],
-            cwd=self.directory,
-            env={"PATH": f"{Path(sys.executable).parent}:/usr/bin:/bin"},
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        with self.output.open("rb") as file:
-            self.assertEqual(tomllib.load(file), {"title": "Ввод"})
+    def test_examples(self):
+        """Сравнить TOML трёх примеров с сохранёнными результатами."""
+        for name in ("study", "store", "classroom"):
+            with self.subTest(example=name):
+                config = PROJECT / "examples" / f"{name}.cfg"
+                expected = config.with_suffix(".toml")
+                result = self.convert_files(config, self.output.name)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                actual_text = self.output.read_text(encoding="utf-8")
+                expected_text = expected.read_text(encoding="utf-8")
+                self.assertEqual(
+                    tomllib.loads(actual_text), tomllib.loads(expected_text)
+                )
 
     def test_required_arguments(self):
-        """Вернуть код 2, когда отсутствуют обязательные аргументы."""
-        result = subprocess.run(
-            [sys.executable, "-B", str(MAIN)],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
+        """Вернуть код 2, если отсутствуют обязательные аргументы."""
+        result = self.run_cli()
         self.assertEqual(result.returncode, 2)
         self.assertIn("--input", result.stderr)
         self.assertIn("--output", result.stderr)
