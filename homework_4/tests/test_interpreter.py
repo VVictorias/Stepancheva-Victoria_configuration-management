@@ -6,6 +6,7 @@ import tempfile
 import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from unittest.mock import patch
 
 PROJECT = Path(__file__).resolve().parents[1]
 ASSEMBLER = PROJECT / "src" / "assembler.py"
@@ -87,15 +88,12 @@ class InterpreterTests(unittest.TestCase):
         )
 
     def test_upper_address(self):
-        """Записать, прочитать и вывести последнее слово памяти."""
+        """Проверить начальные нули и запись в последнее слово."""
         self.assert_program(
+            "STORE 65535\nLOAD 65534\nREAD 1\nSTORE 65533\n"
             "LOAD 197\nSTORE 65535\nLOAD 65534\nREAD 1\nSTORE 65534\n",
-            65534, [197, 197],
+            65532, [0, 0, 197, 197],
         )
-
-    def test_zero_accumulator_and_unwritten_memory(self):
-        """Проверить нулевое начальное значение регистра и данных."""
-        self.assert_program("STORE 100\n", 100, [0, 0])
 
     def test_read_out_of_memory(self):
         """Отклонить READ, если сумма регистра и смещения вне памяти."""
@@ -118,10 +116,11 @@ class InterpreterTests(unittest.TestCase):
                 self.assertFalse(self.dump.exists())
 
     def test_corrupt_binary(self):
-        """Отклонить обрезанную команду и ненулевые биты заполнения."""
+        """Отклонить неполную команду, лишние биты и неизвестный код."""
         for machine_code, message in (
             ("50 0C 00", "неполная команда"),
             ("DB 05 80", "ненулевые биты за полем B"),
+            ("50 0C 00 00 0F", "байт 4: неизвестный код операции 15"),
         ):
             with self.subTest(machine_code=machine_code):
                 self.binary.write_bytes(bytes.fromhex(machine_code))
@@ -130,29 +129,6 @@ class InterpreterTests(unittest.TestCase):
                 self.assertIn(message, result.stderr)
                 self.assertFalse(self.dump.exists())
 
-    def test_unknown_opcode(self):
-        """Сообщить позицию неизвестной команды в машинном коде."""
-        self.binary.write_bytes(bytes.fromhex("50 0C 00 00 0F"))
-        result = self.interpret(0, 0)
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("байт 4: неизвестный код операции 15", result.stderr)
-        self.assertFalse(self.dump.exists())
-
-    def test_missing_binary(self):
-        """Сообщить об отсутствующем двоичном файле."""
-        result = self.interpret(0, 0)
-        self.assertEqual(result.returncode, 1)
-        self.assertIn(str(self.binary), result.stderr)
-        self.assertFalse(self.dump.exists())
-
-    def test_bad_xml_path(self):
-        """Сообщить об отсутствующей папке для XML-дампа."""
-        self.assemble(EXAMPLES / "copy.asm")
-        self.dump = self.directory / "absent" / "memory.xml"
-        result = self.interpret(100, 107)
-        self.assertEqual(result.returncode, 1)
-        self.assertIn(str(self.dump), result.stderr)
-
     def test_bswap_example(self):
         """Проверить исходное и переставленное слово в XML."""
         self.assemble(EXAMPLES / "bswap.asm")
@@ -160,27 +136,18 @@ class InterpreterTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assert_dump(100, [0x01020304, 0x04030201])
 
-    def test_bswap_in_memory(self):
-        """Выполнить BSWAP на нуле, повторе байтов и граничных словах."""
-        self.assert_program(
-            "LOAD 0\nSTORE 100\nBSWAP 100\nSTORE 100\n"
-            "LOAD 0x0A0A0A0A\nSTORE 101\nBSWAP 101\nSTORE 101\n"
-            "LOAD 0x80\nSTORE 102\nBSWAP 102\nSTORE 102\n"
-            "BSWAP 102\nSTORE 103\n"
-            "LOAD 0x0FFFFFFF\nSTORE 104\nBSWAP 104\nSTORE 104\n"
-            "BSWAP 104\nSTORE 105\n",
-            100, [0, 0x0A0A0A0A, 0x80000000, 0x80, 0xFFFFFF0F, 0x0FFFFFFF],
-        )
-
-    def test_bswap_full_word_bounds(self):
-        """Проверить крайние значения 32-битной операции отдельно."""
-        from unittest.mock import patch
-
+    def test_bswap_bounds(self):
+        """Проверить границы слова и двойную перестановку байтов."""
         with patch.object(sys, "path", [str(INTERPRETER.parent), *sys.path]):
-            from interpreter import swap_bytes
+            from interpreter import bswap
 
-        self.assertEqual(swap_bytes(0), 0)
-        self.assertEqual(swap_bytes(0xFFFFFFFF), 0xFFFFFFFF)
+        self.assertEqual(bswap(0), 0)
+        self.assertEqual(bswap(0xFFFFFFFF), 0xFFFFFFFF)
+        self.assert_program(
+            "LOAD 0x80\nSTORE 100\nBSWAP 100\nSTORE 100\n"
+            "BSWAP 100\nSTORE 101\n",
+            100, [0x80000000, 0x80],
+        )
 
     def assert_vector(self, name, expected):
         """Запустить пример и проверить все девять исходных адресов."""

@@ -1,36 +1,21 @@
 # Домашняя работа №4
 
-**Вариант 22.** Ассемблер и интерпретатор учебной виртуальной машины.
-Задание приведено на страницах 92–95 файла `конф4.pdf`.
+**Вариант №22. Ассемблер и интерпретатор учебной виртуальной машины.**
 
-Все команды запускаются из папки `homework_4`. Для выходных файлов я
-использовала временную папку.
+Переход в папку работы из корня репозитория.
+[Правила ассемблера и параметры запуска](homework_4/README.md).
 
 ```bash
-demo=$(mktemp -d)
+cd homework_4
 ```
 
 ## Этап 1. Перевод программы в промежуточное представление
 
-В исходном файле на каждой строке записана мнемоника и один аргумент.
-Я использовала мнемоники `LOAD`, `READ`, `STORE` и `BSWAP`. Ассемблер
-находит код операции по мнемонике, проверяет диапазон аргумента и
-возвращает пару `(opcode, operand)`.
-
-```python
-opcode = OPCODES[name]
-limit = OPERAND_MASKS[opcode]
-if not 0 <= operand <= limit:
-    raise ValueError(f"строка {number}: аргумент {name} вне 0..{limit}")
-return opcode, operand
-```
-
-При ошибке в команде выводится номер строки. Для проверки разбора я
-использовала [четыре команды из методички](homework_4/examples/control.asm).
-Флаг `--ir` показывает их поля A и B.
+Ассемблер читает мнемонику и аргумент, проверяет их и сохраняет пары `(A, B)`.
+Флаг `--ir` показывает поля четырёх команд из методички.
 
 ```bash
-bash run.sh assemble --input examples/control.asm --output "$demo/control.bin" --ir
+bash run.sh assemble --input examples/control.asm --output /tmp/control.bin --ir
 ```
 
 ```text
@@ -43,20 +28,13 @@ A=5, B=654
 
 ## Этап 2. Формирование машинного кода
 
-Поле A занимает младшие четыре бита. Чтобы поставить поле B на своё
-место, я сдвигаю аргумент на четыре бита влево и объединяю его с кодом
-операции. Затем число записывается в порядке от младшего байта к старшему.
-Команда `LOAD` занимает 4 байта, остальные команды занимают по 3 байта.
-
-```python
-def encode(opcode, operand):
-    """Упаковать A и B в байты от младшего к старшему."""
-    word = (operand << OP_BITS) | opcode
-    return word.to_bytes(COMMAND_SIZES[opcode], "little")
-```
+Поле A занимает биты 0–3, поле B начинается с бита 4. У `LOAD` поле B
+заканчивается на бите 31, у остальных команд на бите 19. Байты записываются
+от младшего к старшему. `LOAD` занимает 4 байта, остальные команды по 3.
 
 ```bash
-bash run.sh assemble --input examples/control.asm --output "$demo/control.bin" --test
+bash run.sh assemble --input examples/control.asm --output /tmp/control.bin --test
+wc -c < /tmp/control.bin
 ```
 
 ```text
@@ -65,44 +43,25 @@ bash run.sh assemble --input examples/control.asm --output "$demo/control.bin" -
 0xF3, 0x3B, 0x00
 0xE5, 0x28, 0x00
 Ассемблировано команд: 4
+      13
 ```
 
-В двоичном файле 13 байтов. Тест сравнивает каждый байт с методичкой.
+Все четыре последовательности совпали с методичкой. В файле 13 байт.
 
 ## Этап 3. Интерпретатор и операции с памятью
 
-Для команд и данных используется один `bytearray`. Машинный код
-загружается с нулевого байта. Интерпретатор читает код операции из
-младших четырёх битов, определяет длину команды и извлекает поле B.
-Счётчик сдвигается на размер команды. Программа заканчивается на границе
-загруженного кода.
-
-Аккумулятор начинается с нуля. Адрес данных задаётся в 32-битных словах.
-Слово с адресом `i` начинается с байта `4 * i`. Чтение использует
-сумму аккумулятора и смещения, запись использует адрес из поля B.
-
-```python
-if opcode == OP_LOAD:
-    accumulator = operand
-elif opcode == OP_READ:
-    accumulator = read_word(memory, accumulator + operand)
-elif opcode == OP_STORE:
-    write_word(memory, operand, accumulator)
-```
-
-В [программе копирования](homework_4/examples/copy.asm) код занимает
-68 байт, а данные начинаются с байта 400 (слово 100). В командах
-`READ` используется базовый адрес 100 и смещения от 0 до 3. Копия
-записывается в слова 104–107.
+Интерпретатор загружает код с байта 0 в общий массив команд и данных.
+Адрес 32-битного слова `i` соответствует байту `4 * i`. Интерпретатор
+читает команды из этого массива, декодирует их и выполняет.
+В примере `READ` и `STORE` копируют слова 100–103 в слова 104–107.
 
 ```bash
-bash run.sh assemble --input examples/copy.asm --output "$demo/copy.bin"
-bash run.sh interpret --input "$demo/copy.bin" --output "$demo/copy.xml" --range 100 107
-cat "$demo/copy.xml"
+bash run.sh assemble --input examples/copy.asm --output /tmp/copy.bin
+bash run.sh interpret --input /tmp/copy.bin --output /tmp/copy.xml --range 100 107
+cat /tmp/copy.xml
 ```
 
 ```xml
-<?xml version='1.0' encoding='utf-8'?>
 <memory>
   <cell address="100">197</cell>
   <cell address="101">0</cell>
@@ -115,98 +74,104 @@ cat "$demo/copy.xml"
 </memory>
 ```
 
-Отдельный тест записывает новые байты поверх ещё не выполненной команды
-`LOAD`. Интерпретатор выполняет изменённую команду из общей памяти.
-
 ## Этап 4. Реализация АЛУ
 
-Для `bswap()` я выбрала 32-битные беззнаковые слова. Интерпретатор читает
-слово по адресу из поля B и разбивает его на четыре байта от младшего
-к старшему. Затем он читает эти же байты от старшего к младшему
-и помещает результат в аккумулятор.
-
-```python
-def swap_bytes(value):
-    """Развернуть четыре байта беззнакового слова."""
-    return int.from_bytes(value.to_bytes(WORD_SIZE, "little"), "big")
-```
+`bswap()` меняет порядок четырёх байтов 32-битного слова.
+Результат `0x01020304 → 0x04030201` попадает в аккумулятор, затем
+`STORE` сохраняет его в слове 101.
 
 ```bash
-bash run.sh assemble --input examples/bswap.asm --output "$demo/bswap.bin"
-bash run.sh interpret --input "$demo/bswap.bin" --output "$demo/bswap.xml" --range 100 101
-cat "$demo/bswap.xml"
+bash run.sh assemble --input examples/bswap.asm --output /tmp/bswap.bin
+bash run.sh interpret --input /tmp/bswap.bin --output /tmp/bswap.xml --range 100 101
+cat /tmp/bswap.xml
 ```
 
-В XML по адресу 100 записано исходное значение 16909060 (`0x01020304`).
-По адресу 101 записано 67305985 (`0x04030201`). В тестах также проверены
-ноль, слово с четырьмя одинаковыми байтами, старший бит и `0xFFFFFFFF`.
+```xml
+<memory>
+  <cell address="100">16909060</cell>
+  <cell address="101">67305985</cell>
+</memory>
+```
 
 ## Этап 5. Выполнение тестовой задачи
 
-Я написала три программы для вектора из девяти элементов. Первые 18 команд
-`LOAD` и `STORE` заполняют слова 100–108. Затем для каждого элемента
-выполняются `BSWAP` и `STORE` с одним и тем же адресом. Например, первая
-пара команд обработки выглядит так.
+В каждой программе 36 команд. `BSWAP` обрабатывает девять слов по адресам
+100–108, а `STORE` возвращает результат в то же слово. Исходные векторы
+и значения в XML приведены в десятичной системе.
 
-```asm
-BSWAP 100
-STORE 100
-```
+Исходный вектор `vector_bytes.asm` `[16909060, 1122867, 1, 256, 65536, 16777216, 5614335, 168496141, 252851286]`.
 
 ```bash
-for name in vector_bytes vector_edges vector_small; do
-  bash run.sh assemble --input "examples/$name.asm" --output "$demo/$name.bin"
-  bash run.sh interpret --input "$demo/$name.bin" --output "$demo/$name.xml" --range 100 108
-  cat "$demo/$name.xml"
-done
+bash run.sh assemble --input examples/vector_bytes.asm --output /tmp/vector_bytes.bin
+bash run.sh interpret --input /tmp/vector_bytes.bin --output /tmp/vector_bytes.xml --range 100 108
+cat /tmp/vector_bytes.xml
 ```
 
-Каждая программа собрана в 36 команд. Ниже приведены исходные векторы
-и значения из XML в шестнадцатеричной форме. Тесты сравнили все 27
-значений и их адреса с ожидаемыми.
-
-### 1. Разные позиции байтов
-
-[Исходная программа](homework_4/examples/vector_bytes.asm)
-
-```text
-До
-01020304 00112233 00000001 00000100 00010000 01000000 0055AAFF 0A0B0C0D 0F123456
-После
-04030201 33221100 01000000 00010000 00000100 00000001 FFAA5500 0D0C0B0A 5634120F
+```xml
+<memory>
+  <cell address="100">67305985</cell>
+  <cell address="101">857870592</cell>
+  <cell address="102">16777216</cell>
+  <cell address="103">65536</cell>
+  <cell address="104">256</cell>
+  <cell address="105">1</cell>
+  <cell address="106">4289352960</cell>
+  <cell address="107">218893066</cell>
+  <cell address="108">1446253071</cell>
+</memory>
 ```
 
-### 2. Ноль, повторяющиеся байты и границы
+Исходный вектор `vector_edges.asm` `[0, 168430090, 11250432, 1048560, 128, 255, 268435455, 134217728, 8356094]`.
 
-[Исходная программа](homework_4/examples/vector_edges.asm)
-
-```text
-До
-00000000 0A0A0A0A 00ABAB00 000FFFF0 00000080 000000FF 0FFFFFFF 08000000 007F80FE
-После
-00000000 0A0A0A0A 00ABAB00 F0FF0F00 80000000 FF000000 FFFFFF0F 00000008 FE807F00
+```bash
+bash run.sh assemble --input examples/vector_edges.asm --output /tmp/vector_edges.bin
+bash run.sh interpret --input /tmp/vector_edges.bin --output /tmp/vector_edges.xml --range 100 108
+cat /tmp/vector_edges.xml
 ```
 
-### 3. Небольшие десятичные числа
-
-[Исходная программа](homework_4/examples/vector_small.asm)
-
-```text
-До
-1 2 3 7 15 31 63 127 255
-После
-01000000 02000000 03000000 07000000 0F000000 1F000000 3F000000 7F000000 FF000000
+```xml
+<memory>
+  <cell address="100">0</cell>
+  <cell address="101">168430090</cell>
+  <cell address="102">11250432</cell>
+  <cell address="103">4043247360</cell>
+  <cell address="104">2147483648</cell>
+  <cell address="105">4278190080</cell>
+  <cell address="106">4294967055</cell>
+  <cell address="107">8</cell>
+  <cell address="108">4269833984</cell>
+</memory>
 ```
+
+Исходный вектор `vector_small.asm` `[1, 2, 3, 7, 15, 31, 63, 127, 255]`.
+
+```bash
+bash run.sh assemble --input examples/vector_small.asm --output /tmp/vector_small.bin
+bash run.sh interpret --input /tmp/vector_small.bin --output /tmp/vector_small.xml --range 100 108
+cat /tmp/vector_small.xml
+```
+
+```xml
+<memory>
+  <cell address="100">16777216</cell>
+  <cell address="101">33554432</cell>
+  <cell address="102">50331648</cell>
+  <cell address="103">117440512</cell>
+  <cell address="104">251658240</cell>
+  <cell address="105">520093696</cell>
+  <cell address="106">1056964608</cell>
+  <cell address="107">2130706432</cell>
+  <cell address="108">4278190080</cell>
+</memory>
+```
+
+Во всех трёх дампах проверены 27 значений и их адреса.
 
 ## Тестирование
 
-Я запустила 25 тестов через `unittest`. Все тесты прошли. Проверены
-операнды, машинные байты, работа аккумулятора, общая память, содержимое XML,
-ошибки путей и повреждённый машинный код.
-[Команда запуска и результаты](homework_4/tests/RESULTS.md).
+```bash
+python3 -B -m unittest discover -s tests -q
+```
 
-## Вывод
-
-Ассемблер переводит все четыре команды варианта 22 в машинный код.
-Интерпретатор выполняет их и сохраняет выбранные слова памяти в XML.
-На трёх примерах результат `bswap()` записан в исходный вектор.
+Все 18 тестов прошли (`OK`). Проверены границы, ошибки машинного кода и XML.
+Отдельный тест подтверждает, что запись в область кода меняет будущую команду.

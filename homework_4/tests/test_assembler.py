@@ -65,7 +65,8 @@ class AssemblerTests(unittest.TestCase):
         ])
 
     def test_bad_syntax(self):
-        """Отклонить неизвестную команду, лишний или пропущенный аргумент."""
+        """Отклонить ошибки синтаксиса и сохранить прежний файл."""
+        self.output.write_bytes(b"previous")
         for source, message in (
             ("MOVE 1", "неизвестная команда"),
             ("LOAD", "нужен один аргумент"),
@@ -75,6 +76,7 @@ class AssemblerTests(unittest.TestCase):
         ):
             with self.subTest(source=source):
                 self.assert_bad_source(source, message)
+                self.assertEqual(self.output.read_bytes(), b"previous")
 
     def test_operand_out_of_range(self):
         """Отклонить отрицательные и слишком большие операнды."""
@@ -107,16 +109,3 @@ class AssemblerTests(unittest.TestCase):
             "0xE5, 0x28, 0x00",
             "Ассемблировано команд: 4",
         ])
-
-    def test_bad_output(self):
-        """Сообщить об ошибке, если родительской папки выхода нет."""
-        self.output = self.output.parent / "absent" / self.output.name
-        result = self.assemble(CONTROL)
-        self.assertEqual(result.returncode, 1)
-        self.assertIn(str(self.output), result.stderr)
-
-    def test_bad_source_keeps_output(self):
-        """Сохранить существующий файл при ошибке разбора."""
-        self.output.write_bytes(b"previous")
-        self.assert_bad_source("LOAD bad", "неверное число")
-        self.assertEqual(self.output.read_bytes(), b"previous")

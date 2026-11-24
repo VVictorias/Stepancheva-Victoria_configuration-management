@@ -55,7 +55,7 @@ def write_word(memory, address, value):
     memory[start:start + WORD_SIZE] = value.to_bytes(WORD_SIZE, "little")
 
 
-def swap_bytes(value):
+def bswap(value):
     """Развернуть четыре байта беззнакового слова."""
     return int.from_bytes(value.to_bytes(WORD_SIZE, "little"), "big")
 
@@ -78,7 +78,7 @@ def run_program(binary):
         elif opcode == OP_STORE:
             write_word(memory, operand, accumulator)
         elif opcode == OP_BSWAP:
-            accumulator = swap_bytes(read_word(memory, operand))
+            accumulator = bswap(read_word(memory, operand))
         pc += size
     return memory
 

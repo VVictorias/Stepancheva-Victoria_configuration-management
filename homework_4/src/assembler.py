@@ -13,7 +13,8 @@ def parse_line(text, number):
     """Получить значения полей A и B из одной команды."""
     parts = text.split()
     name = parts[0].upper()
-    if name not in OPCODES:
+    opcode = OPCODES.get(name)
+    if opcode is None:
         raise ValueError(f"строка {number}: неизвестная команда {parts[0]}")
     if len(parts) != ARGUMENT_COUNT:
         raise ValueError(f"строка {number}: для {name} нужен один аргумент")
@@ -27,7 +28,6 @@ def parse_line(text, number):
             f"строка {number}: неверное число {token!r}"
         ) from None
 
-    opcode = OPCODES[name]
     limit = OPERAND_MASKS[opcode]
     if not 0 <= operand <= limit:
         raise ValueError(f"строка {number}: аргумент {name} вне 0..{limit}")
@@ -44,22 +44,10 @@ def parse_program(source):
     return commands
 
 
-def show_ir(commands):
-    """Вывести значения полей в том же виде, что и в методичке."""
-    for opcode, operand in commands:
-        print(f"A={opcode}, B={operand}")
-
-
 def encode(opcode, operand):
     """Упаковать A и B в байты от младшего к старшему."""
     word = (operand << OP_BITS) | opcode
     return word.to_bytes(COMMAND_SIZES[opcode], "little")
-
-
-def show_bytes(chunks):
-    """Вывести байты каждой команды в формате методички."""
-    for chunk in chunks:
-        print(", ".join(f"0x{byte:02X}" for byte in chunk))
 
 
 def main():
@@ -84,9 +72,11 @@ def main():
         print(f"Ошибка: {error}", file=sys.stderr)
         return 1
     if args.ir:
-        show_ir(commands)
+        for opcode, operand in commands:
+            print(f"A={opcode}, B={operand}")
     if args.test:
-        show_bytes(chunks)
+        for chunk in chunks:
+            print(", ".join(f"0x{byte:02X}" for byte in chunk))
     print(f"Ассемблировано команд: {len(commands)}")
     return 0
 
