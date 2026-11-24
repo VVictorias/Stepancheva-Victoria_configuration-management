@@ -60,8 +60,11 @@ def show_graph(graph, config):
 
 def show_visualization(graph, config):
     """Вывести Mermaid, необязательное дерево и открыть изображение."""
-    page = write_visualization(graph, config.output, not config.no_open)
-    print(mermaid_text(graph), end="")
+    diagram = mermaid_text(graph)
+    page = write_visualization(
+        graph.root, diagram, config.output, not config.no_open
+    )
+    print(diagram, end="")
     if config.ascii_tree:
         print(ascii_tree(graph))
     print(f"Диаграмма: {page}")

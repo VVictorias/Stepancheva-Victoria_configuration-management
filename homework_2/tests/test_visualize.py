@@ -18,16 +18,20 @@ class VisualizationTests(unittest.TestCase):
     def test_mermaid_files_and_browser(self):
         """Сохранить Mermaid и HTML с рёбрами, открыть страницу."""
         graph = graph_module.Graph("A", {"A": ["B"], "B": ["A"]})
+        diagram = visualize.mermaid_text(graph)
         with tempfile.TemporaryDirectory() as directory:
             with patch(
                 "depgraph.visualize.webbrowser.open", return_value=True
             ) as opened:
-                page = visualize.write_visualization(graph, directory)
+                page = visualize.write_visualization(
+                    graph.root, diagram, directory
+                )
             opened.assert_called_once_with(page.as_uri())
             html = page.read_text(encoding="utf-8")
             self.assertIn("mermaid.run", html)
             self.assertIn("Диаграмма готова", html)
-            diagram = (page.parent / "graph.mmd").read_text(encoding="utf-8")
+            saved = (page.parent / "graph.mmd").read_text(encoding="utf-8")
+            self.assertEqual(saved, diagram)
             self.assertIn("flowchart TD", diagram)
             self.assertIn("n0 --> n1", diagram)
             self.assertIn("n1 --> n0", diagram)

@@ -2,18 +2,20 @@
 
 **Вариант 22.** Визуализация графа зависимостей Java Maven.
 
-Команды выполняются из папки `homework_2`. Для запуска программы нужен
-Python 3.9 или новее. Maven нужен только для сравнения результатов.
+Для запуска нужен Python 3.9 или новее. Для сравнения результатов
+нужна команда `mvn`. Начните в корне репозитория и выполняйте
+команды в одном терминале.
 
 ```bash
+cd homework_2
 repo=https://repo.maven.apache.org/maven2/
 ```
 
 ## Этап 1. Настройка программы
 
-На первом этапе нужно принять параметры командной строки, показать их
-значения и обработать ошибки ввода. Я использовала `argparse` для настройки CLI.
-Программа проверяет имя пакета и адрес репозитория или путь к файлу.
+Программа читает параметры через `argparse`, проверяет имя пакета
+и адрес репозитория или путь к файлу. Режим `config` показывает
+значения параметров до загрузки POM.
 
 ```bash
 bash run.sh --package junit:junit:4.13.2 --repository "$repo" \
@@ -30,22 +32,24 @@ ascii_tree=true
 Следующие четыре команды проверяют обработку ошибок.
 
 ```bash
-bash run.sh --mode config --package junit --repository "$repo"
-bash run.sh --mode config --package junit:junit:4.13.2 --repository ftp://example.org
-bash run.sh --mode config --package A --repository examples/chain.txt --test-repository=true
-bash run.sh --mode config --package junit:junit:4.13.2 --repository "$repo" --ascii-tree=true
+bash run.sh --mode config --package junit --repository "$repo" || echo "Код: $?"
+bash run.sh --mode config --package junit:junit:4.13.2 \
+  --repository ftp://example.org || echo "Код: $?"
+bash run.sh --mode config --package A --repository examples/chain.txt \
+  --test-repository=true || echo "Код: $?"
+bash run.sh --mode config --package junit:junit:4.13.2 --repository "$repo" \
+  --ascii-tree=true || echo "Код: $?"
 ```
 
 Во всех четырёх случаях получен код 2 и сообщение с именем ошибочного
 параметра. Флаги `--test-repository` и `--ascii-tree` передаются без
-значений. Режим `config` позволяет проверить настройки до загрузки POM.
+значений.
 
 ## Этап 2. Прямые зависимости
 
-На втором этапе нужно самостоятельно получить прямые зависимости Maven-пакета.
-Программа составляет путь к POM из координат пакета, загружает его через
-`urllib.request` и разбирает XML через `ElementTree`. При обработке POM
-учитываются родительская модель, свойства и управляемые версии.
+Программа составляет путь к POM из координат пакета, загружает файл через
+`urllib.request` и читает XML через `xml.etree.ElementTree`. При разборе
+учитываются родительский POM, свойства и управляемые версии.
 
 ```bash
 bash run.sh --package junit:junit:4.13.2 --repository "$repo" --mode direct
@@ -61,9 +65,9 @@ org.hamcrest:hamcrest-library:1.3
 
 ## Этап 3. Построение графа
 
-На третьем этапе нужно построить граф транзитивных зависимостей с помощью
-DFS без рекурсии. Программа кладёт вершины в стек, сохраняет связи и при обходе
-отмечает рёбра к вершинам, которые ещё находятся в стеке. Из Maven POM в
+Граф транзитивных зависимостей строится обходом в глубину (DFS) без
+рекурсии. При проверке циклов программа отмечает рёбра к вершинам,
+которые ещё находятся в стеке. Из Maven POM в
 граф потребителя входят зависимости с областями `compile` и `runtime`
 с учётом `optional` и `exclusions`.
 
@@ -76,25 +80,25 @@ done
 
 В цепочке получены связи `A → B → C`. В ромбе обе ветви ведут к `D`.
 При обходе третьего примера программа завершила построение графа и вывела
-`Цикл: C -> A`. Стек позволяет обработать общий узел и обнаружить
-циклическую ссылку.
+`Цикл: C -> A`.
 
 ## Этап 4. Порядок загрузки
 
-На четвёртом этапе нужно вывести зависимости в порядке загрузки. В список попадают
-вершины в порядке завершения DFS. Так зависимость появляется раньше
-пакета, который её использует. Корневой пакет в список не входит.
+Программа добавляет вершину в список после обхода её зависимостей.
+Поэтому зависимость появляется раньше пакета, который её использует.
+Корневой пакет в список не входит.
 
 ```bash
 for file in chain diamond cycle; do
   bash run.sh --package A --repository "examples/$file.txt" \
-    --test-repository --mode order
+    --test-repository --mode order || echo "Код: $?"
 done
 bash run.sh --package junit:junit:4.13.2 --repository "$repo" --mode order
 ```
 
 Для цепочки получен порядок `C, B`, для ромба `D, B, C`. Граф с циклом
-дал ошибку и код 1. Для JUnit программа вывела `hamcrest-core:1.3`.
+дал ошибку и код 1. Для JUnit программа вывела
+`org.hamcrest:hamcrest-core:1.3`.
 При сравнении в Maven 3.9.11 команда `dependency:build-classpath` поставила
 JAR JUnit перед JAR Hamcrest Core. Classpath задаёт порядок поиска
 классов, а порядок DFS показывает, какие зависимости нужны
@@ -102,13 +106,13 @@ JAR JUnit перед JAR Hamcrest Core. Classpath задаёт порядок п
 
 ## Этап 5. Визуализация
 
-На пятом этапе нужно показать графы трёх реальных пакетов и сравнить их с Maven.
-Программа записывает Mermaid в `graph.mmd`, открывает изображение в
-`graph.html` и выводит ASCII-дерево при включённом флаге `--ascii-tree`.
+Программа записывает Mermaid в `graph.mmd`, открывает `graph.html`
+в браузере и выводит ASCII-дерево при флаге `--ascii-tree`.
 
 ```bash
 demo="$(mktemp -d)"
-for package in junit:junit:4.13.2 org.hamcrest:hamcrest:2.2 org.slf4j:slf4j-simple:2.0.17; do
+packages=(junit:junit:4.13.2 org.hamcrest:hamcrest:2.2 org.slf4j:slf4j-simple:2.0.17)
+for package in "${packages[@]}"; do
   IFS=: read -r group artifact version <<< "$package"
   bash run.sh --package "$package" --repository "$repo" --ascii-tree \
     --output "$demo/$artifact"
@@ -138,12 +142,12 @@ flowchart TD
 показан SLF4J API. У Hamcrest 2.2 дерево состоит из одной вершины.
 HTML-страницы всех трёх примеров отобразили диаграммы в браузере.
 
-Для сравнения я создала проверочный POM с одной зависимостью на каждый
-пакет и выполнила `dependency:tree` и `dependency:build-classpath`.
+Для каждого пакета создаётся отдельный проверочный POM.
+Maven выводит дерево зависимостей и список JAR-файлов.
 
 ```bash
 plugin=org.apache.maven.plugins:maven-dependency-plugin:3.8.1
-for package in junit:junit:4.13.2 org.hamcrest:hamcrest:2.2 org.slf4j:slf4j-simple:2.0.17; do
+for package in "${packages[@]}"; do
   IFS=: read -r group artifact version <<< "$package"
   mkdir -p "$demo/$artifact"
   pom="$demo/$artifact/pom.xml"
@@ -165,7 +169,7 @@ done
 показывает тестовый JUnit и второе объявление SLF4J API с типом
 `test-jar`. В граф потребителя эти тестовые зависимости не входят.
 
-## Проверка и вывод
+## Тестирование
 
 ```bash
 python3 -B -m unittest discover -s tests -v

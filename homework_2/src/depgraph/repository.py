@@ -62,7 +62,7 @@ class TestRepository:
 
     def children(self, package, exclusions):
         """Вернуть соседей с пустым контекстом Maven-исключений."""
-        return [(child, exclusions) for child in self.graph[package]]
+        return [(child, exclusions) for child in self.direct(package)]
 
     def direct(self, package):
         """Вернуть прямые зависимости тестового пакета."""

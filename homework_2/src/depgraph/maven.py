@@ -141,7 +141,7 @@ class MavenRepository:
         ]
 
     def children(self, package, exclusions):
-        """Вернуть runtime-соседей с исключениями для следующего шага."""
+        """Отобрать зависимости для графа и передать их исключения."""
         return [
             (item.package, exclusions | item.exclusions)
             for item in self.direct(package)

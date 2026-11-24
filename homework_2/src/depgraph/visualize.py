@@ -57,9 +57,9 @@ def tree_children(graph, node, prefix, ancestors):
     ]
 
 
-def html_page(graph, diagram):
-    """Создать HTML со встроенным исходником и графическим SVG Mermaid."""
-    title = escape(graph.root)
+def html_page(root, diagram):
+    """Подготовить HTML, который отобразит Mermaid как SVG."""
+    title = escape(root)
     return f"""<!doctype html>
 <html lang="ru">
 <meta charset="utf-8">
@@ -83,17 +83,16 @@ try {{
 """
 
 
-def write_visualization(graph, output=None, open_browser=True):
+def write_visualization(root, diagram, output=None, open_browser=True):
     """Сохранить текст и HTML, при обычном запуске показать граф."""
     directory = (
         Path(output) if output else Path(tempfile.mkdtemp(prefix="depgraph-"))
     )
     directory = directory.expanduser().resolve()
     directory.mkdir(parents=True, exist_ok=True)
-    diagram = mermaid_text(graph)
     (directory / "graph.mmd").write_text(diagram, encoding="utf-8")
     page = directory / "graph.html"
-    page.write_text(html_page(graph, diagram), encoding="utf-8")
+    page.write_text(html_page(root, diagram), encoding="utf-8")
     if open_browser and not webbrowser.open(page.as_uri()):
         raise ValueError(f"браузер не открылся; откройте {page} вручную")
     return page
