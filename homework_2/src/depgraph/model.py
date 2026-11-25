@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 import re
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as et
 
 
 GROUP = r"[A-Za-z0-9_][A-Za-z0-9_-]*"
@@ -36,8 +36,8 @@ class Model:
 def xml_document(data):
     """Прочитать POM и убрать пространства имён для единых XPath."""
     try:
-        root = ET.fromstring(data)
-    except ET.ParseError as error:
+        root = et.fromstring(data)
+    except et.ParseError as error:
         raise ValueError(f"некорректный XML: {error}") from error
     for element in root.iter():
         element.tag = element.tag.rsplit("}", 1)[-1]

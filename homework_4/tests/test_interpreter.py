@@ -4,7 +4,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as et
 from pathlib import Path
 from unittest.mock import patch
 
@@ -49,7 +49,7 @@ class InterpreterTests(unittest.TestCase):
 
     def assert_dump(self, start, values):
         """Сравнить адреса и значения в XML с ожидаемыми."""
-        root = ET.parse(self.dump).getroot()
+        root = et.parse(self.dump).getroot()
         self.assertEqual(root.tag, "memory")
         self.assertEqual(
             [(cell.tag, cell.attrib, cell.text) for cell in root],

@@ -2,7 +2,7 @@
 
 import argparse
 import sys
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as et
 from pathlib import Path
 
 from isa import (
@@ -85,12 +85,12 @@ def run_program(binary):
 
 def dump_memory(memory, addresses, path):
     """Сохранить адрес и десятичное значение каждого слова в XML."""
-    root = ET.Element("memory")
+    root = et.Element("memory")
     for address in addresses:
-        cell = ET.SubElement(root, "cell", address=str(address))
+        cell = et.SubElement(root, "cell", address=str(address))
         cell.text = str(read_word(memory, address))
-    tree = ET.ElementTree(root)
-    ET.indent(tree)
+    tree = et.ElementTree(root)
+    et.indent(tree)
     with path.open("wb") as file:
         tree.write(file, encoding="utf-8", xml_declaration=True)
         file.write(b"\n")
